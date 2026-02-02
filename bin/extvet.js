@@ -19,6 +19,7 @@ Usage: extvet <command> [options]
 Commands:
   scan [browser]      Scan installed browser extensions
   check <url|id>      Check a specific extension from web store
+  file <path>         Scan a local extension file (.crx, .xpi, .zip)
   update              Update malicious extension database
   version             Show version
 
@@ -92,6 +93,25 @@ async function main() {
     
     try {
       const results = await scanUrl(target, options);
+      process.exit(results.critical > 0 ? 1 : 0);
+    } catch (error) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  }
+
+  if (command === 'file') {
+    const filePath = args[1];
+    if (!filePath) {
+      console.error('Error: File path required');
+      process.exit(1);
+    }
+    
+    const options = parseOptions(args.slice(2));
+    
+    try {
+      const { scanFile } = require('../src/file-scanner.js');
+      const results = await scanFile(filePath, options);
       process.exit(results.critical > 0 ? 1 : 0);
     } catch (error) {
       console.error(`Error: ${error.message}`);
