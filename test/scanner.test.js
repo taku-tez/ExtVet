@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { scan, version } = require('../src/index.js');
+const { scan, scanUrl, version } = require('../src/index.js');
 
 test('version is defined', () => {
   assert.ok(version);
@@ -30,4 +30,13 @@ test('unknown browser throws error', async () => {
     () => scan('netscape', { quiet: true }),
     /Unknown browser/
   );
+});
+
+test('scanUrl returns object with summary', async () => {
+  // Test with Firefox Add-on
+  const results = await scanUrl('ublock-origin', { quiet: true });
+  assert.ok(typeof results === 'object');
+  assert.ok('critical' in results);
+  assert.ok('warning' in results);
+  assert.ok('info' in results);
 });
