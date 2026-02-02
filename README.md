@@ -1,5 +1,9 @@
 # 🦅 ExtVet
 
+[![CI](https://github.com/taku-tez/ExtVet/actions/workflows/ci.yml/badge.svg)](https://github.com/taku-tez/ExtVet/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org/)
+
 **Browser Extension Security Scanner** - Vet your extensions before they vet your data.
 
 ExtVet analyzes installed browser extensions for security risks, suspicious permissions, and potential malicious behavior.
