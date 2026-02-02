@@ -48,6 +48,19 @@ extvet scan chrome --profile "Profile 1"
 extvet update
 ```
 
+### Scan Local Extension Files
+
+```bash
+# Scan a downloaded .crx file
+extvet file extension.crx
+
+# Scan a Firefox .xpi file
+extvet file addon.xpi
+
+# Scan a zipped extension
+extvet file extension.zip
+```
+
 ### Check a Specific Extension
 
 ```bash

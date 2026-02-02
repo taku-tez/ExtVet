@@ -7,7 +7,7 @@ const { scanFirefox } = require('./scanners/firefox.js');
 const { checkWebStore } = require('./webstore.js');
 const { Reporter } = require('./reporter.js');
 
-const version = '0.3.0';
+const version = '0.4.0';
 
 /**
  * Scan installed browser extensions
