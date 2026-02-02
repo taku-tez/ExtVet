@@ -1,15 +1,21 @@
 {
-  "name": "@extvet/cli",
-  "version": "0.2.0",
+  "name": "browser-extvet",
+  "version": "0.3.0",
   "description": "Browser Extension Security Scanner - Vet your extensions before they vet your data",
   "main": "src/index.js",
   "bin": {
-    "extvet": "./bin/extvet.js"
+    "extvet": "bin/extvet.js"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md"
+  ],
   "scripts": {
     "test": "node --test test/*.test.js",
     "lint": "eslint src/",
-    "start": "node bin/extvet.js"
+    "start": "node bin/extvet.js",
+    "prepublishOnly": "npm test"
   },
   "keywords": [
     "browser-extension",

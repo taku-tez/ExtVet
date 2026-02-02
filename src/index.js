@@ -4,9 +4,10 @@
 
 const { scanChrome } = require('./scanners/chrome.js');
 const { scanFirefox } = require('./scanners/firefox.js');
+const { checkWebStore } = require('./webstore.js');
 const { Reporter } = require('./reporter.js');
 
-const version = '0.2.0';
+const version = '0.3.0';
 
 /**
  * Scan installed browser extensions
@@ -55,19 +56,20 @@ async function scan(browser, options = {}) {
 async function scanUrl(target, options = {}) {
   const reporter = new Reporter(options);
   
-  // Extract extension ID from URL if needed
-  let extensionId = target;
-  if (target.includes('chrome.google.com') || target.includes('chromewebstore')) {
-    const match = target.match(/\/([a-z]{32})/);
-    if (match) extensionId = match[1];
+  reporter.start(`Checking extension: ${target}...`);
+  
+  const { info, findings } = await checkWebStore(target, options);
+  
+  if (info) {
+    console.log(`  Found: ${info.name}`);
+    if (info.users) console.log(`  Users: ${info.users.toLocaleString()}`);
+    if (info.rating) console.log(`  Rating: ${info.rating.toFixed(1)}/5`);
+    if (info.version) console.log(`  Version: ${info.version}`);
   }
   
-  reporter.start(`Checking extension: ${extensionId}...`);
+  const summary = reporter.report(findings, options);
   
-  // TODO: Implement web store lookup
-  reporter.warn('Web store checking not yet implemented');
-  
-  return { critical: 0, warning: 0, info: 0 };
+  return summary;
 }
 
 module.exports = {
