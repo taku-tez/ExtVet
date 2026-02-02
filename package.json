@@ -13,7 +13,6 @@
   ],
   "scripts": {
     "test": "node --test test/*.test.js",
-    "lint": "eslint src/",
     "start": "node bin/extvet.js",
     "prepublishOnly": "npm test"
   },
@@ -43,7 +42,5 @@
   "dependencies": {
     "node-fetch": "^3.3.0"
   },
-  "devDependencies": {
-    "eslint": "^9.0.0"
-  }
+  "devDependencies": {}
 }
