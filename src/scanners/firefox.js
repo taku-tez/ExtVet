@@ -212,22 +212,54 @@ function findExtensions(profilePath) {
 /**
  * Parse manifest.json from extension
  */
-function parseManifest(extPath, extType) {
+function parseManifest(extPath, extType, options = {}) {
   let manifestPath;
+  let extractedPath = null;
   
   if (extType === 'xpi') {
-    // For XPI files, we'd need to extract - skip for now
-    // In production, would use JSZip or similar
+    // Try to extract XPI file
+    try {
+      const { extractXpi } = require('../xpi-extractor.js');
+      extractedPath = extractXpi(extPath);
+      if (extractedPath) {
+        manifestPath = path.join(extractedPath, 'manifest.json');
+        // Store extracted path for later cleanup
+        options._extractedPath = extractedPath;
+      } else {
+        return null;
+      }
+    } catch (err) {
+      return null;
+    }
+  } else {
+    manifestPath = path.join(extPath, 'manifest.json');
+  }
+  
+  if (!fs.existsSync(manifestPath)) {
+    if (extractedPath) {
+      try {
+        const { cleanupExtracted } = require('../xpi-extractor.js');
+        cleanupExtracted(extractedPath);
+      } catch (e) {}
+    }
     return null;
   }
   
-  manifestPath = path.join(extPath, 'manifest.json');
-  if (!fs.existsSync(manifestPath)) return null;
-  
   try {
     const content = fs.readFileSync(manifestPath, 'utf-8');
-    return JSON.parse(content);
+    const manifest = JSON.parse(content);
+    // For XPI, update the extPath to the extracted directory
+    if (extractedPath) {
+      options._actualPath = extractedPath;
+    }
+    return manifest;
   } catch (err) {
+    if (extractedPath) {
+      try {
+        const { cleanupExtracted } = require('../xpi-extractor.js');
+        cleanupExtracted(extractedPath);
+      } catch (e) {}
+    }
     return null;
   }
 }
@@ -492,7 +524,11 @@ async function scanFirefox(options = {}) {
     totalExtensions += extensions.length;
     
     for (const ext of extensions) {
-      const manifest = parseManifest(ext.path, ext.type);
+      const parseOptions = {};
+      const manifest = parseManifest(ext.path, ext.type, parseOptions);
+      
+      // Use extracted path for XPI if available
+      const scanPath = parseOptions._actualPath || ext.path;
       
       if (!manifest && ext.type === 'xpi') {
         // For XPI files without manifest access, just note it
@@ -500,8 +536,8 @@ async function scanFirefox(options = {}) {
           id: 'ff-xpi-packed',
           severity: 'info',
           extension: `${ext.name || ext.id}`,
-          message: 'Packed XPI extension - limited analysis available',
-          recommendation: 'Unpack XPI for full code analysis',
+          message: 'Packed XPI extension - could not extract (unzip required)',
+          recommendation: 'Install unzip for full XPI analysis',
         });
         continue;
       }
@@ -514,7 +550,15 @@ async function scanFirefox(options = {}) {
       findings.push(...checkKnownMalicious(ext, manifest));
       findings.push(...analyzePermissions(manifest, ext));
       findings.push(...analyzeContentScripts(manifest, ext));
-      findings.push(...analyzeBackground(manifest, ext, ext.path));
+      findings.push(...analyzeBackground(manifest, ext, scanPath));
+      
+      // Cleanup extracted XPI
+      if (parseOptions._extractedPath) {
+        try {
+          const { cleanupExtracted } = require('../xpi-extractor.js');
+          cleanupExtracted(parseOptions._extractedPath);
+        } catch (e) {}
+      }
     }
   }
   
