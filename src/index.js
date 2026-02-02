@@ -3,9 +3,10 @@
  */
 
 const { scanChrome } = require('./scanners/chrome.js');
+const { scanFirefox } = require('./scanners/firefox.js');
 const { Reporter } = require('./reporter.js');
 
-const version = '0.1.0';
+const version = '0.2.0';
 
 /**
  * Scan installed browser extensions
@@ -34,7 +35,7 @@ async function scan(browser, options = {}) {
       findings = await scanChrome(options);
       break;
     case 'firefox':
-      reporter.warn('Firefox scanning not yet implemented');
+      findings = await scanFirefox(options);
       break;
     default:
       throw new Error(`Unknown browser: ${browser}`);

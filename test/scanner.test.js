@@ -7,9 +7,18 @@ test('version is defined', () => {
   assert.match(version, /^\d+\.\d+\.\d+$/);
 });
 
-test('scan returns object with summary', async () => {
+test('scan chrome returns object with summary', async () => {
   // This will likely return empty results in CI (no browser installed)
   const results = await scan('chrome', { quiet: true });
+  assert.ok(typeof results === 'object');
+  assert.ok('critical' in results);
+  assert.ok('warning' in results);
+  assert.ok('info' in results);
+});
+
+test('scan firefox returns object with summary', async () => {
+  // This will likely return empty results in CI (no browser installed)
+  const results = await scan('firefox', { quiet: true });
   assert.ok(typeof results === 'object');
   assert.ok('critical' in results);
   assert.ok('warning' in results);
