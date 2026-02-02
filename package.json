@@ -1,0 +1,43 @@
+{
+  "name": "@extvet/cli",
+  "version": "0.1.0",
+  "description": "Browser Extension Security Scanner - Vet your extensions before they vet your data",
+  "main": "src/index.js",
+  "bin": {
+    "extvet": "./bin/extvet.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "lint": "eslint src/",
+    "start": "node bin/extvet.js"
+  },
+  "keywords": [
+    "browser-extension",
+    "chrome-extension",
+    "firefox-addon",
+    "security",
+    "scanner",
+    "manifest",
+    "permissions",
+    "audit"
+  ],
+  "author": "tez",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/taku-tez/ExtVet.git"
+  },
+  "bugs": {
+    "url": "https://github.com/taku-tez/ExtVet/issues"
+  },
+  "homepage": "https://github.com/taku-tez/ExtVet#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0"
+  }
+}
