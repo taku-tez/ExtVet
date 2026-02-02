@@ -16,7 +16,12 @@ ExtVet analyzes installed browser extensions for security risks, suspicious perm
 ## Installation
 
 ```bash
-npm install -g @extvet/cli
+# From npm (coming soon)
+npm install -g browser-extvet
+
+# From source
+git clone https://github.com/taku-tez/ExtVet.git
+cd ExtVet && npm install && npm link
 ```
 
 ## Usage
