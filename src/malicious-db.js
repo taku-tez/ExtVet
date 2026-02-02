@@ -35,6 +35,28 @@ const BUILTIN_IDS = new Set([
   'lklmhefoneonjalpjcnhaidnodopinib',
   'ciifcakemmcbbdpmljdohdmbodagmela',
   'meljmedplehjlnnaempfdoecookjenph',
+  
+  // GitLab Feb 2025 - 3.2M users affected
+  // https://gitlab-com.gitlab.io/gl-security/security-tech-notes/threat-intelligence-tech-notes/malicious-browser-extensions-feb-2025/
+  'mdaboflcmhejfihjcbmdiebgfchigjcf', // Blipshot
+  'gaoflciahikhligngeccdecgfjngejlh', // Emojis - Emoji Keyboard
+  'fedimamkpgiemhacbdhkkaihgofncola', // WAToolkit
+  'jlhgcomgldfapimdboelilfcipigkgik', // Color Changer for YouTube
+  'jdjldbengpgdcfkljfdmakdgmfpneldd', // Video Effects for YouTube
+  'deljjimclpnhngmikaiiodgggdniaooh', // Themes for Chrome and YouTube
+  'giaoehhefkmchjbbdnahgeppblbdejmj', // Mike Adblock für Chrome
+  'hmooaemjmediafeacjplpbpenjnpcneg', // Page Refresh
+  'acbiaofoeebeinacmcknopaikmecdehl', // Wistia Video Downloader
+  'nlgphodeccebbcnkgmokeegopgpnjfkc', // Super dark mode
+  'fbcgkphadgmbalmlklhbdagcicajenei', // Emoji keyboard emojis for chrome
+  'alplpnakfeabeiebipdmaenpmbgknjce', // Adblocker for Chrome - NoAds
+  'ogcaehilgakehloljjmajoempaflmdci', // Adblock for You
+  'onomjaelhagjjojbkcafidnepbfkpnee', // Adblock for Chrome
+  'bpconcjcammlapcogcnnelfmaeghhagj', // Nimble capture
+  'gdocgbfmddcfnlnpmnghmjicjognhonm', // KProxy
+  
+  // Cyberhaven Dec 2024 supply chain attack
+  'pajkjnmeojmbapicmbpliphjmcekeaac', // Cyberhaven (compromised)
 ]);
 
 /**
