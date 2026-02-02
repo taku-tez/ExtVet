@@ -19,6 +19,7 @@ Usage: extvet <command> [options]
 Commands:
   scan [browser]      Scan installed browser extensions
   check <url|id>      Check a specific extension from web store
+  update              Update malicious extension database
   version             Show version
 
 Browsers:
@@ -52,6 +53,19 @@ async function main() {
   if (command === 'version' || command === '--version' || command === '-v') {
     console.log(`ExtVet v${version}`);
     process.exit(0);
+  }
+
+  if (command === 'update') {
+    console.log('🦅 ExtVet - Updating malicious extension database...\n');
+    try {
+      const { updateMaliciousIds } = require('../src/malicious-db.js');
+      const ids = await updateMaliciousIds();
+      console.log(`\n✅ Database updated: ${ids.size} malicious extensions`);
+      process.exit(0);
+    } catch (error) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
   }
 
   if (command === 'scan') {
