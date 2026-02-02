@@ -54,10 +54,21 @@ const SUSPICIOUS_PATTERNS = [
   { pattern: /WebSocket\s*\(/g, severity: 'info', msg: 'Uses WebSocket connections' },
 ];
 
-// Known malicious extension IDs (example - would need real database)
-const KNOWN_MALICIOUS = new Set([
-  // Add known malicious extension IDs here
-]);
+// Known malicious extension IDs - loaded dynamically
+let KNOWN_MALICIOUS = null;
+
+async function loadMaliciousDb(options = {}) {
+  if (KNOWN_MALICIOUS) return KNOWN_MALICIOUS;
+  
+  try {
+    const { getMaliciousIds } = require('../malicious-db.js');
+    KNOWN_MALICIOUS = await getMaliciousIds({ quiet: true, ...options });
+  } catch (err) {
+    KNOWN_MALICIOUS = new Set();
+  }
+  
+  return KNOWN_MALICIOUS;
+}
 
 /**
  * Get Chrome extension directories based on OS and browser type
@@ -341,7 +352,7 @@ function analyzeBackground(manifest, extInfo, extPath) {
 function checkKnownMalicious(extInfo, manifest) {
   const findings = [];
   
-  if (KNOWN_MALICIOUS.has(extInfo.id)) {
+  if (KNOWN_MALICIOUS && KNOWN_MALICIOUS.has(extInfo.id)) {
     findings.push({
       id: 'ext-known-malicious',
       severity: 'critical',
@@ -359,6 +370,9 @@ function checkKnownMalicious(extInfo, manifest) {
  */
 async function scanChrome(options = {}) {
   const findings = [];
+  
+  // Load malicious DB
+  await loadMaliciousDb(options);
   
   // Get extension paths
   const basePaths = getExtensionPaths(options);

@@ -71,10 +71,21 @@ const SUSPICIOUS_PATTERNS = [
   { pattern: /browser\.webRequest\.filterResponseData/g, severity: 'warning', msg: 'Filters response data' },
 ];
 
-// Known malicious Firefox add-on IDs
-const KNOWN_MALICIOUS = new Set([
-  // Add known malicious extension IDs here
-]);
+// Known malicious add-on IDs - loaded dynamically
+let KNOWN_MALICIOUS = null;
+
+async function loadMaliciousDb(options = {}) {
+  if (KNOWN_MALICIOUS) return KNOWN_MALICIOUS;
+  
+  try {
+    const { getMaliciousIds } = require('../malicious-db.js');
+    KNOWN_MALICIOUS = await getMaliciousIds({ quiet: true, ...options });
+  } catch (err) {
+    KNOWN_MALICIOUS = new Set();
+  }
+  
+  return KNOWN_MALICIOUS;
+}
 
 /**
  * Get Firefox profile paths based on OS
@@ -436,7 +447,7 @@ function analyzeBackground(manifest, extInfo, extPath) {
 function checkKnownMalicious(extInfo, manifest) {
   const findings = [];
   
-  if (KNOWN_MALICIOUS.has(extInfo.id)) {
+  if (KNOWN_MALICIOUS && KNOWN_MALICIOUS.has(extInfo.id)) {
     findings.push({
       id: 'ff-known-malicious',
       severity: 'critical',
@@ -454,6 +465,9 @@ function checkKnownMalicious(extInfo, manifest) {
  */
 async function scanFirefox(options = {}) {
   const findings = [];
+  
+  // Load malicious DB
+  await loadMaliciousDb(options);
   
   // Get Firefox paths
   const basePaths = getFirefoxPaths();
