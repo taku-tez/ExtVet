@@ -3,17 +3,14 @@
  * Scan local extension files (.crx, .xpi, .zip)
  */
 
-const fs = require('fs');
-const path = require('path');
-const { extractCrx, cleanupExtracted: cleanupCrx } = require('./crx-extractor.js');
-const { extractXpi, cleanupExtracted: cleanupXpi } = require('./xpi-extractor.js');
-const { Reporter } = require('./reporter.js');
+import * as fs from 'fs';
+import * as path from 'path';
+import { extractCrx, cleanupExtracted as cleanupCrx } from './crx-extractor.js';
+import { extractXpi, cleanupExtracted as cleanupXpi } from './xpi-extractor.js';
+import { Reporter } from './reporter.js';
+import type { Finding, ScanOptions, ScanSummary, Manifest, PermissionDanger, SuspiciousPattern } from './types.js';
 
-// Import analyzers from Chrome scanner
-const { scanChrome } = require('./scanners/chrome.js');
-
-// Dangerous permissions (shared)
-const DANGEROUS_PERMISSIONS = {
+const DANGEROUS_PERMISSIONS: Record<string, PermissionDanger> = {
   '<all_urls>': { severity: 'critical', msg: 'Access to ALL websites' },
   '*://*/*': { severity: 'critical', msg: 'Access to ALL websites' },
   'webRequestBlocking': { severity: 'critical', msg: 'Can modify/block network requests' },
@@ -28,8 +25,7 @@ const DANGEROUS_PERMISSIONS = {
   'storage': { severity: 'info', msg: 'Can store data locally' },
 };
 
-// Suspicious code patterns
-const SUSPICIOUS_PATTERNS = [
+const SUSPICIOUS_PATTERNS: SuspiciousPattern[] = [
   { pattern: /eval\s*\(/g, severity: 'critical', msg: 'Uses eval() - code injection risk' },
   { pattern: /new\s+Function\s*\(/g, severity: 'critical', msg: 'Uses Function constructor' },
   { pattern: /document\.write/g, severity: 'warning', msg: 'Uses document.write - XSS risk' },
@@ -39,13 +35,10 @@ const SUSPICIOUS_PATTERNS = [
 
 /**
  * Scan a local extension file
- * @param {string} filePath - Path to .crx, .xpi, or .zip file
- * @param {object} options - Scan options
- * @returns {object} Scan results
  */
-async function scanFile(filePath, options = {}) {
+export async function scanFile(filePath: string, options: ScanOptions = {}): Promise<ScanSummary> {
   const reporter = new Reporter(options);
-  const findings = [];
+  const findings: Finding[] = [];
   
   if (!fs.existsSync(filePath)) {
     throw new Error(`File not found: ${filePath}`);
@@ -56,10 +49,9 @@ async function scanFile(filePath, options = {}) {
   
   reporter.start(`Scanning file: ${fileName}...`);
   
-  let extractedPath = null;
-  let cleanupFn = null;
+  let extractedPath: string | null = null;
+  let cleanupFn: ((p: string) => void) | null = null;
   
-  // Extract based on file type
   if (ext === '.crx') {
     extractedPath = extractCrx(filePath);
     cleanupFn = cleanupCrx;
@@ -67,7 +59,6 @@ async function scanFile(filePath, options = {}) {
     extractedPath = extractXpi(filePath);
     cleanupFn = cleanupXpi;
   } else if (ext === '.zip') {
-    // Try CRX extractor (handles plain ZIP)
     extractedPath = extractCrx(filePath);
     cleanupFn = cleanupCrx;
   } else {
@@ -79,17 +70,15 @@ async function scanFile(filePath, options = {}) {
   }
   
   try {
-    // Parse manifest
     const manifestPath = path.join(extractedPath, 'manifest.json');
     if (!fs.existsSync(manifestPath)) {
       throw new Error('No manifest.json found in extension');
     }
     
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as Manifest;
     console.log(`  Name: ${manifest.name || 'Unknown'}`);
     console.log(`  Version: ${manifest.version || 'Unknown'}`);
     
-    // Analyze permissions
     const allPermissions = [
       ...(manifest.permissions || []),
       ...(manifest.optional_permissions || []),
@@ -109,7 +98,6 @@ async function scanFile(filePath, options = {}) {
       }
     }
     
-    // Check manifest version
     if (manifest.manifest_version === 2) {
       findings.push({
         id: 'file-mv2-deprecated',
@@ -120,7 +108,6 @@ async function scanFile(filePath, options = {}) {
       });
     }
     
-    // Scan JavaScript files for suspicious patterns
     const jsFiles = findJsFiles(extractedPath);
     
     for (const jsFile of jsFiles) {
@@ -140,13 +127,12 @@ async function scanFile(filePath, options = {}) {
             });
           }
         }
-      } catch (err) {
+      } catch {
         // Skip unreadable files
       }
     }
     
   } finally {
-    // Cleanup
     if (cleanupFn && extractedPath) {
       cleanupFn(extractedPath);
     }
@@ -156,10 +142,7 @@ async function scanFile(filePath, options = {}) {
   return summary;
 }
 
-/**
- * Find all JavaScript files in directory
- */
-function findJsFiles(dir, files = []) {
+function findJsFiles(dir: string, files: string[] = []): string[] {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   
   for (const entry of entries) {
@@ -176,5 +159,3 @@ function findJsFiles(dir, files = []) {
   
   return files;
 }
-
-module.exports = { scanFile };

@@ -1,16 +1,11 @@
 /**
  * Config Loader - .extvetrc support
- * 
- * Supports:
- * - .extvetrc (JSON)
- * - .extvetrc.json
- * - extvet.config.js
- * - package.json "extvet" field
  */
 
-const fs = require('fs');
-const path = require('path');
-const logger = require('./logger.js');
+import * as fs from 'fs';
+import * as path from 'path';
+import * as logger from './logger.js';
+import type { Finding, ExtvetConfig, ScanOptions } from './types.js';
 
 const CONFIG_FILES = [
   '.extvetrc',
@@ -21,42 +16,23 @@ const CONFIG_FILES = [
 /**
  * Default configuration
  */
-const DEFAULT_CONFIG = {
-  // Extensions to ignore (by ID)
+export const DEFAULT_CONFIG: ExtvetConfig = {
   ignoreExtensions: [],
-  
-  // Severity overrides
-  // e.g., { "ext-perm-tabs": "warning" }
   severityOverrides: {},
-  
-  // Custom rules
   customRules: [],
-  
-  // Default browser
   browser: 'chrome',
-  
-  // Output format
   format: 'table',
-  
-  // Minimum severity to report
   severity: 'info',
-  
-  // Quiet mode
   quiet: false,
-  
-  // Verbose mode
   verbose: false,
 };
 
 /**
  * Find and load config file
- * @param {string} startDir - Directory to start searching from
- * @returns {object} Configuration object
  */
-function loadConfig(startDir = process.cwd()) {
-  let config = { ...DEFAULT_CONFIG };
+export function loadConfig(startDir: string = process.cwd()): ExtvetConfig {
+  let config: ExtvetConfig = { ...DEFAULT_CONFIG };
   
-  // Try each config file
   for (const filename of CONFIG_FILES) {
     const filepath = path.join(startDir, filename);
     
@@ -64,21 +40,20 @@ function loadConfig(startDir = process.cwd()) {
       logger.debug(`Loading config from ${filepath}`);
       
       try {
+        let fileConfig: Partial<ExtvetConfig>;
         if (filename.endsWith('.js')) {
-          // JavaScript config
-          const jsConfig = require(filepath);
-          config = mergeConfig(config, jsConfig);
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          fileConfig = require(filepath) as Partial<ExtvetConfig>;
         } else {
-          // JSON config
           const content = fs.readFileSync(filepath, 'utf-8');
-          const jsonConfig = JSON.parse(content);
-          config = mergeConfig(config, jsonConfig);
+          fileConfig = JSON.parse(content) as Partial<ExtvetConfig>;
         }
+        config = mergeConfig(config, fileConfig);
         
         logger.debug('Config loaded', config);
         return config;
       } catch (err) {
-        logger.error(`Failed to load config from ${filepath}`, err);
+        logger.error(`Failed to load config from ${filepath}`, err as Error);
       }
     }
   }
@@ -87,13 +62,14 @@ function loadConfig(startDir = process.cwd()) {
   const pkgPath = path.join(startDir, 'package.json');
   if (fs.existsSync(pkgPath)) {
     try {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { extvet?: Partial<ExtvetConfig> };
       if (pkg.extvet) {
         logger.debug('Loading config from package.json');
-        config = mergeConfig(config, pkg.extvet);
+        const pkgConfig = pkg.extvet;
+        config = mergeConfig(config, pkgConfig);
         return config;
       }
-    } catch (err) {
+    } catch {
       // Ignore package.json errors
     }
   }
@@ -105,28 +81,35 @@ function loadConfig(startDir = process.cwd()) {
 /**
  * Merge config objects (CLI options override file config)
  */
-function mergeConfig(base, override) {
-  const merged = { ...base };
-  
-  for (const [key, value] of Object.entries(override)) {
-    if (value !== undefined && value !== null) {
-      if (Array.isArray(value)) {
-        merged[key] = [...(base[key] || []), ...value];
-      } else if (typeof value === 'object' && !Array.isArray(value)) {
-        merged[key] = { ...(base[key] || {}), ...value };
-      } else {
-        merged[key] = value;
-      }
-    }
-  }
-  
-  return merged;
+export function mergeConfig(base: ExtvetConfig, override: Partial<ExtvetConfig>): ExtvetConfig {
+  return {
+    ignoreExtensions: [
+      ...base.ignoreExtensions,
+      ...(override.ignoreExtensions || []),
+    ],
+    severityOverrides: {
+      ...base.severityOverrides,
+      ...(override.severityOverrides || {}),
+    },
+    customRules: [
+      ...base.customRules,
+      ...(override.customRules || []),
+    ],
+    browser: override.browser ?? base.browser,
+    format: override.format ?? base.format,
+    severity: override.severity ?? base.severity,
+    quiet: override.quiet ?? base.quiet,
+    verbose: override.verbose ?? base.verbose,
+  };
 }
 
 /**
  * Apply severity overrides to findings
  */
-function applySeverityOverrides(findings, overrides) {
+export function applySeverityOverrides(
+  findings: Finding[], 
+  overrides: ScanOptions['severityOverrides']
+): Finding[] {
   if (!overrides || Object.keys(overrides).length === 0) {
     return findings;
   }
@@ -142,21 +125,22 @@ function applySeverityOverrides(findings, overrides) {
 /**
  * Filter ignored extensions
  */
-function filterIgnoredExtensions(findings, ignoreList) {
+export function filterIgnoredExtensions(
+  findings: Finding[], 
+  ignoreList: string[] | undefined
+): Finding[] {
   if (!ignoreList || ignoreList.length === 0) {
     return findings;
   }
   
   return findings.filter(finding => {
-    // Extract extension ID from the finding
-    // Chrome IDs are 32 lowercase letters, Firefox can be email-like or UUID
     const match = finding.extension?.match(/\(([a-z0-9@._-]+)\)/i);
     const extId = match ? match[1] : null;
-    return !ignoreList.includes(extId);
+    return !ignoreList.includes(extId || '');
   });
 }
 
-module.exports = {
+export default {
   loadConfig,
   mergeConfig,
   applySeverityOverrides,

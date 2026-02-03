@@ -2,30 +2,27 @@
  * ExtVet - Browser Extension Security Scanner
  */
 
-const { scanChrome } = require('./scanners/chrome.js');
-const { scanFirefox } = require('./scanners/firefox.js');
-const { checkWebStore } = require('./webstore.js');
-const { Reporter } = require('./reporter.js');
-const { applySeverityOverrides, filterIgnoredExtensions } = require('./config.js');
-const logger = require('./logger.js');
+import { scanChrome } from './scanners/chrome.js';
+import { scanFirefox } from './scanners/firefox.js';
+import { checkWebStore } from './webstore.js';
+import { Reporter } from './reporter.js';
+import { applySeverityOverrides, filterIgnoredExtensions } from './config.js';
+import * as logger from './logger.js';
+import type { ScanOptions, ScanSummary, Finding, WebStoreResult } from './types.js';
 
-const version = '0.5.0';
+export const version = '0.5.0';
 
 /**
  * Scan installed browser extensions
- * @param {string} browser - Browser type (chrome, firefox, edge, brave)
- * @param {object} options - Scan options
- * @returns {object} Scan results
  */
-async function scan(browser, options = {}) {
-  // Configure logger for this scan
+export async function scan(browser: string, options: ScanOptions = {}): Promise<ScanSummary> {
   logger.configure(options);
   
   const reporter = new Reporter(options);
   
   reporter.start(`Scanning ${browser} extensions...`);
 
-  let findings = [];
+  let findings: Finding[] = [];
 
   switch (browser.toLowerCase()) {
     case 'chrome':
@@ -47,14 +44,12 @@ async function scan(browser, options = {}) {
       throw new Error(`Unknown browser: ${browser}`);
   }
 
-  // Apply config-based filtering
   if (options.ignoreExtensions) {
     const before = findings.length;
     findings = filterIgnoredExtensions(findings, options.ignoreExtensions);
     logger.debug(`Filtered ignored extensions: ${before} -> ${findings.length} findings`);
   }
   
-  // Apply severity overrides
   if (options.severityOverrides) {
     findings = applySeverityOverrides(findings, options.severityOverrides);
     logger.debug('Applied severity overrides');
@@ -67,31 +62,27 @@ async function scan(browser, options = {}) {
 
 /**
  * Scan a specific extension from URL or store ID
- * @param {string} target - Extension URL or ID
- * @param {object} options - Scan options
- * @returns {object} Scan results
  */
-async function scanUrl(target, options = {}) {
+export async function scanUrl(target: string, options: ScanOptions = {}): Promise<ScanSummary> {
+  logger.configure(options);
+  
   const reporter = new Reporter(options);
   
   reporter.start(`Checking extension: ${target}...`);
   
-  const { info, findings } = await checkWebStore(target, options);
+  const result: WebStoreResult = await checkWebStore(target, {});
   
-  if (info) {
-    console.log(`  Found: ${info.name}`);
-    if (info.users) console.log(`  Users: ${info.users.toLocaleString()}`);
-    if (info.rating) console.log(`  Rating: ${info.rating.toFixed(1)}/5`);
-    if (info.version) console.log(`  Version: ${info.version}`);
+  if (result.info) {
+    console.log(`  Found: ${result.info.name}`);
+    if (result.info.users) console.log(`  Users: ${result.info.users.toLocaleString()}`);
+    if (result.info.rating) console.log(`  Rating: ${result.info.rating.toFixed(1)}/5`);
+    if (result.info.version) console.log(`  Version: ${result.info.version}`);
   }
   
-  const summary = reporter.report(findings, options);
+  const summary = reporter.report(result.findings, options);
   
   return summary;
 }
 
-module.exports = {
-  scan,
-  scanUrl,
-  version,
-};
+// Re-export types
+export type { ScanOptions, ScanSummary, Finding } from './types.js';

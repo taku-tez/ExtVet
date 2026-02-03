@@ -10,17 +10,15 @@
  * - ZIP archive: rest of file
  */
 
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const { execSync } = require('child_process');
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { execSync } from 'child_process';
 
 /**
  * Extract CRX file to temporary directory
- * @param {string} crxPath - Path to CRX file
- * @returns {string|null} Path to extracted directory or null on failure
  */
-function extractCrx(crxPath) {
+export function extractCrx(crxPath: string): string | null {
   if (!fs.existsSync(crxPath)) {
     return null;
   }
@@ -31,38 +29,31 @@ function extractCrx(crxPath) {
   try {
     const data = fs.readFileSync(crxPath);
     
-    // Check magic bytes "Cr24"
     if (data.length < 16 || data.toString('utf8', 0, 4) !== 'Cr24') {
-      // Not a valid CRX file, try as plain ZIP
       return extractAsZip(crxPath, tempDir);
     }
     
-    // Read version
     const version = data.readUInt32LE(4);
     
-    let zipStart;
+    let zipStart: number;
     
     if (version === 3) {
-      // CRX3 format
       const headerLength = data.readUInt32LE(8);
       zipStart = 12 + headerLength;
     } else if (version === 2) {
-      // CRX2 format (legacy)
       const pubKeyLength = data.readUInt32LE(8);
       const sigLength = data.readUInt32LE(12);
       zipStart = 16 + pubKeyLength + sigLength;
     } else {
-      // Unknown version, try as ZIP
       return extractAsZip(crxPath, tempDir);
     }
     
     if (zipStart >= data.length) {
-      fs.rmdirSync(tempDir, { recursive: true });
+      fs.rmSync(tempDir, { recursive: true, force: true });
       return null;
     }
     
-    // Extract ZIP portion
-    const zipData = data.slice(zipStart);
+    const zipData = data.subarray(zipStart);
     const tempZip = path.join(tempDir, '_temp.zip');
     fs.writeFileSync(tempZip, zipData);
     
@@ -70,15 +61,15 @@ function extractCrx(crxPath) {
       execSync(`unzip -q "${tempZip}" -d "${tempDir}"`, { stdio: 'pipe' });
       fs.unlinkSync(tempZip);
       return tempDir;
-    } catch (e) {
-      fs.rmdirSync(tempDir, { recursive: true });
+    } catch {
+      fs.rmSync(tempDir, { recursive: true, force: true });
       return null;
     }
     
-  } catch (err) {
+  } catch {
     try {
-      fs.rmdirSync(tempDir, { recursive: true });
-    } catch (e) {}
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch { /* ignore */ }
     return null;
   }
 }
@@ -86,33 +77,25 @@ function extractCrx(crxPath) {
 /**
  * Try to extract as plain ZIP
  */
-function extractAsZip(filePath, tempDir) {
+function extractAsZip(filePath: string, tempDir: string): string | null {
   try {
     execSync(`unzip -q "${filePath}" -d "${tempDir}"`, { stdio: 'pipe' });
     return tempDir;
-  } catch (e) {
+  } catch {
     try {
-      fs.rmdirSync(tempDir, { recursive: true });
-    } catch (e) {}
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch { /* ignore */ }
     return null;
   }
 }
 
 /**
  * Cleanup extracted directory
- * @param {string} extractedPath - Path to cleanup
  */
-function cleanupExtracted(extractedPath) {
+export function cleanupExtracted(extractedPath: string): void {
   if (extractedPath && extractedPath.includes('extvet-crx-')) {
     try {
       fs.rmSync(extractedPath, { recursive: true, force: true });
-    } catch (err) {
-      // Ignore cleanup errors
-    }
+    } catch { /* ignore */ }
   }
 }
-
-module.exports = {
-  extractCrx,
-  cleanupExtracted,
-};

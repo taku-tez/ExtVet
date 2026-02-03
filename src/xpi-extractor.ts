@@ -3,74 +3,60 @@
  * Extract and analyze Firefox XPI (ZIP) files
  */
 
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const { execSync } = require('child_process');
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { execSync } from 'child_process';
 
 /**
  * Extract XPI file to temporary directory
- * @param {string} xpiPath - Path to XPI file
- * @returns {string|null} Path to extracted directory or null on failure
  */
-function extractXpi(xpiPath) {
+export function extractXpi(xpiPath: string): string | null {
   if (!fs.existsSync(xpiPath)) {
     return null;
   }
   
-  // Create temp directory
   const tempDir = path.join(os.tmpdir(), 'extvet-xpi-' + Date.now());
   fs.mkdirSync(tempDir, { recursive: true });
   
   try {
-    // XPI files are just ZIP files
-    // Try unzip first (Linux/Mac), then tar (fallback)
     try {
       execSync(`unzip -q "${xpiPath}" -d "${tempDir}"`, { stdio: 'pipe' });
-    } catch (e) {
-      // Try with Node's built-in capabilities if unzip fails
-      // For now, just return null and note the limitation
-      fs.rmdirSync(tempDir, { recursive: true });
+    } catch {
+      fs.rmSync(tempDir, { recursive: true, force: true });
       return null;
     }
     
     return tempDir;
-  } catch (err) {
-    // Cleanup on error
+  } catch {
     try {
-      fs.rmdirSync(tempDir, { recursive: true });
-    } catch (e) {}
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch { /* ignore */ }
     return null;
   }
 }
 
 /**
  * Cleanup extracted directory
- * @param {string} extractedPath - Path to cleanup
  */
-function cleanupExtracted(extractedPath) {
+export function cleanupExtracted(extractedPath: string): void {
   if (extractedPath && extractedPath.includes('extvet-xpi-')) {
     try {
       fs.rmSync(extractedPath, { recursive: true, force: true });
-    } catch (err) {
-      // Ignore cleanup errors
-    }
+    } catch { /* ignore */ }
   }
 }
 
 /**
  * List all JavaScript files in directory
- * @param {string} dir - Directory to scan
- * @returns {string[]} Array of file paths
  */
-function findJsFiles(dir, files = []) {
+export function findJsFiles(dir: string, files: string[] = []): string[] {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     
     if (entry.isDirectory()) {
-      // Skip node_modules and .git
       if (entry.name !== 'node_modules' && entry.name !== '.git') {
         findJsFiles(fullPath, files);
       }
@@ -83,9 +69,3 @@ function findJsFiles(dir, files = []) {
   
   return files;
 }
-
-module.exports = {
-  extractXpi,
-  cleanupExtracted,
-  findJsFiles,
-};

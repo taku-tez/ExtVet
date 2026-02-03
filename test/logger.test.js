@@ -1,6 +1,6 @@
 const { test, describe, beforeEach } = require('node:test');
 const assert = require('node:assert');
-const logger = require('../src/logger.js');
+const logger = require('../dist/logger.js');
 
 describe('Logger', () => {
   beforeEach(() => {

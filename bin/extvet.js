@@ -5,9 +5,9 @@
  * Browser Extension Security Scanner
  */
 
-const { scan, scanUrl, version } = require('../src/index.js');
-const logger = require('../src/logger.js');
-const { loadConfig, mergeConfig } = require('../src/config.js');
+const { scan, scanUrl, version } = require('../dist/index.js');
+const logger = require('../dist/logger.js');
+const { loadConfig, mergeConfig } = require('../dist/config.js');
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -75,7 +75,7 @@ async function main() {
   if (command === 'update') {
     console.log('🦅 ExtVet - Updating malicious extension database...\n');
     try {
-      const { updateMaliciousIds } = require('../src/malicious-db.js');
+      const { updateMaliciousIds } = require('../dist/malicious-db.js');
       const ids = await updateMaliciousIds();
       console.log(`\n✅ Database updated: ${ids.size} malicious extensions`);
       process.exit(0);
@@ -138,7 +138,7 @@ async function main() {
     logger.configure(options);
     
     try {
-      const { scanFile } = require('../src/file-scanner.js');
+      const { scanFile } = require('../dist/file-scanner.js');
       const results = await scanFile(filePath, options);
       process.exit(results.critical > 0 ? 1 : 0);
     } catch (error) {

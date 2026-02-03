@@ -3,13 +3,30 @@
  * Fetches and caches known malicious extension IDs from public sources
  */
 
-const https = require('https');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+import * as https from 'https';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+
+interface Source {
+  name: string;
+  url: string;
+  parser: (text: string) => Set<string>;
+}
+
+interface CacheData {
+  timestamp: number;
+  ids: string[];
+  count: number;
+}
+
+interface DbOptions {
+  quiet?: boolean;
+  offline?: boolean;
+}
 
 // Sources for malicious extension IDs
-const SOURCES = [
+export const SOURCES: Source[] = [
   {
     name: 'palant',
     url: 'https://raw.githubusercontent.com/palant/malicious-extensions-list/main/list.txt',
@@ -37,7 +54,6 @@ const BUILTIN_IDS = new Set([
   'meljmedplehjlnnaempfdoecookjenph',
   
   // GitLab Feb 2025 - 3.2M users affected
-  // https://gitlab-com.gitlab.io/gl-security/security-tech-notes/threat-intelligence-tech-notes/malicious-browser-extensions-feb-2025/
   'mdaboflcmhejfihjcbmdiebgfchigjcf', // Blipshot
   'gaoflciahikhligngeccdecgfjngejlh', // Emojis - Emoji Keyboard
   'fedimamkpgiemhacbdhkkaihgofncola', // WAToolkit
@@ -62,15 +78,13 @@ const BUILTIN_IDS = new Set([
 /**
  * Parse line-based list (one ID per line, # for comments)
  */
-function parseLineList(text) {
-  const ids = new Set();
+function parseLineList(text: string): Set<string> {
+  const ids = new Set<string>();
   const lines = text.split('\n');
   
   for (const line of lines) {
     const trimmed = line.trim();
-    // Skip comments and empty lines
     if (!trimmed || trimmed.startsWith('#')) continue;
-    // Chrome extension IDs are 32 lowercase letters
     if (/^[a-z]{32}$/.test(trimmed)) {
       ids.add(trimmed);
     }
@@ -82,19 +96,19 @@ function parseLineList(text) {
 /**
  * Fetch URL contents
  */
-function fetchUrl(url) {
+function fetchUrl(url: string): Promise<string | null> {
   return new Promise((resolve, reject) => {
     const req = https.get(url, {
-      headers: { 'User-Agent': 'ExtVet/0.3.0' },
+      headers: { 'User-Agent': 'ExtVet/0.5.0' },
     }, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         return fetchUrl(res.headers.location).then(resolve).catch(reject);
       }
       if (res.statusCode !== 200) {
         return resolve(null);
       }
       let data = '';
-      res.on('data', chunk => data += chunk);
+      res.on('data', (chunk: Buffer) => data += chunk.toString());
       res.on('end', () => resolve(data));
     });
     req.on('error', reject);
@@ -108,19 +122,19 @@ function fetchUrl(url) {
 /**
  * Load cached IDs
  */
-function loadCache() {
+function loadCache(): Set<string> | null {
   try {
     if (!fs.existsSync(CACHE_FILE)) return null;
     
-    const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8'));
+    const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8')) as CacheData;
     const age = Date.now() - (data.timestamp || 0);
     
     if (age > CACHE_MAX_AGE_MS) {
-      return null; // Cache expired
+      return null;
     }
     
     return new Set(data.ids || []);
-  } catch (err) {
+  } catch {
     return null;
   }
 }
@@ -128,18 +142,20 @@ function loadCache() {
 /**
  * Save IDs to cache
  */
-function saveCache(ids) {
+function saveCache(ids: Set<string>): void {
   try {
     if (!fs.existsSync(CACHE_DIR)) {
       fs.mkdirSync(CACHE_DIR, { recursive: true });
     }
     
-    fs.writeFileSync(CACHE_FILE, JSON.stringify({
+    const data: CacheData = {
       timestamp: Date.now(),
       ids: Array.from(ids),
       count: ids.size,
-    }));
-  } catch (err) {
+    };
+    
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(data));
+  } catch {
     // Ignore cache write errors
   }
 }
@@ -147,7 +163,7 @@ function saveCache(ids) {
 /**
  * Update malicious IDs from remote sources
  */
-async function updateMaliciousIds(options = {}) {
+export async function updateMaliciousIds(options: DbOptions = {}): Promise<Set<string>> {
   const allIds = new Set(BUILTIN_IDS);
   
   for (const source of SOURCES) {
@@ -168,7 +184,7 @@ async function updateMaliciousIds(options = {}) {
       }
     } catch (err) {
       if (!options.quiet) {
-        console.log(`    Error: ${err.message}`);
+        console.log(`    Error: ${(err as Error).message}`);
       }
     }
   }
@@ -181,37 +197,27 @@ async function updateMaliciousIds(options = {}) {
 /**
  * Get malicious IDs (from cache or fetch)
  */
-async function getMaliciousIds(options = {}) {
-  // Try cache first
+export async function getMaliciousIds(options: DbOptions = {}): Promise<Set<string>> {
   const cached = loadCache();
   if (cached) {
     return cached;
   }
   
-  // Fetch fresh data
   if (!options.offline) {
     try {
       return await updateMaliciousIds(options);
-    } catch (err) {
+    } catch {
       // Fall through to builtin
     }
   }
   
-  // Return builtin fallback
   return BUILTIN_IDS;
 }
 
 /**
  * Check if an extension ID is known malicious
  */
-async function isMalicious(extensionId, options = {}) {
+export async function isMalicious(extensionId: string, options: DbOptions = {}): Promise<boolean> {
   const ids = await getMaliciousIds(options);
   return ids.has(extensionId);
 }
-
-module.exports = {
-  getMaliciousIds,
-  updateMaliciousIds,
-  isMalicious,
-  SOURCES,
-};

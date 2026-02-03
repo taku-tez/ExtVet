@@ -2,27 +2,64 @@
  * Reporter - Output formatting for ExtVet
  */
 
-class Reporter {
-  constructor(options = {}) {
+import type { Finding, ScanOptions, ScanSummary } from './types.js';
+
+interface SarifRule {
+  id: string;
+  shortDescription: { text: string };
+  helpUri?: string;
+}
+
+interface SarifResult {
+  ruleId: string;
+  level: 'error' | 'warning' | 'note';
+  message: { text: string };
+  locations: Array<{
+    physicalLocation: {
+      artifactLocation: { uri: string };
+    };
+  }>;
+}
+
+interface SarifReport {
+  $schema: string;
+  version: string;
+  runs: Array<{
+    tool: {
+      driver: {
+        name: string;
+        informationUri: string;
+        rules: SarifRule[];
+      };
+    };
+    results: SarifResult[];
+  }>;
+}
+
+export class Reporter {
+  private quiet: boolean;
+  private format: string;
+
+  constructor(options: ScanOptions = {}) {
     this.quiet = options.quiet || false;
     this.format = options.format || 'table';
   }
 
-  start(message) {
+  start(message: string): void {
     if (!this.quiet) {
       console.log(`\n🦅 ExtVet - Browser Extension Security Scanner\n`);
       console.log(message);
     }
   }
 
-  warn(message) {
+  warn(message: string): void {
     if (!this.quiet) {
       console.log(`⚠️  ${message}`);
     }
   }
 
-  report(findings, options = {}) {
-    const summary = {
+  report(findings: Finding[], options: ScanOptions = {}): ScanSummary {
+    const summary: ScanSummary = {
       critical: findings.filter(f => f.severity === 'critical').length,
       warning: findings.filter(f => f.severity === 'warning').length,
       info: findings.filter(f => f.severity === 'info').length,
@@ -89,7 +126,7 @@ class Reporter {
     return summary;
   }
 
-  toSarif(findings) {
+  private toSarif(findings: Finding[]): SarifReport {
     return {
       $schema: 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
       version: '2.1.0',
@@ -115,19 +152,16 @@ class Reporter {
     };
   }
 
-  extractRules(findings) {
-    const ruleMap = new Map();
+  private extractRules(findings: Finding[]): SarifRule[] {
+    const ruleMap = new Map<string, SarifRule>();
     for (const f of findings) {
       if (!ruleMap.has(f.id)) {
         ruleMap.set(f.id, {
           id: f.id,
           shortDescription: { text: f.message },
-          helpUri: f.reference || undefined,
         });
       }
     }
     return Array.from(ruleMap.values());
   }
 }
-
-module.exports = { Reporter };

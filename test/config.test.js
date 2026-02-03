@@ -6,7 +6,7 @@ const {
   applySeverityOverrides, 
   filterIgnoredExtensions,
   DEFAULT_CONFIG 
-} = require('../src/config.js');
+} = require('../dist/config.js');
 
 describe('Config', () => {
   test('DEFAULT_CONFIG has expected properties', () => {
@@ -25,22 +25,20 @@ describe('Config', () => {
   });
   
   test('mergeConfig merges objects correctly', () => {
-    const base = { a: 1, b: 2, arr: [1] };
-    const override = { b: 3, c: 4, arr: [2] };
+    const base = { ...DEFAULT_CONFIG, browser: 'chrome' };
+    const override = { browser: 'firefox', ignoreExtensions: ['test-id'] };
     const merged = mergeConfig(base, override);
     
-    assert.strictEqual(merged.a, 1);
-    assert.strictEqual(merged.b, 3);
-    assert.strictEqual(merged.c, 4);
-    assert.deepStrictEqual(merged.arr, [1, 2]);
+    assert.strictEqual(merged.browser, 'firefox');
+    assert.deepStrictEqual(merged.ignoreExtensions, ['test-id']);
   });
   
   test('mergeConfig handles undefined values', () => {
-    const base = { a: 1 };
-    const override = { a: undefined };
+    const base = { ...DEFAULT_CONFIG };
+    const override = { browser: undefined };
     const merged = mergeConfig(base, override);
     
-    assert.strictEqual(merged.a, 1);
+    assert.strictEqual(merged.browser, 'chrome');
   });
   
   test('applySeverityOverrides changes finding severity', () => {

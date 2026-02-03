@@ -3,28 +3,24 @@
  * Scans installed Chrome/Chromium-based browser extensions
  */
 
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const logger = require('../logger.js');
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import * as logger from '../logger.js';
+import type { Finding, ScanOptions, ExtensionInfo, Manifest, PermissionDanger, SuspiciousPattern } from '../types.js';
 
 // Dangerous permissions that need review
-const DANGEROUS_PERMISSIONS = {
-  // Critical - Full access
+const DANGEROUS_PERMISSIONS: Record<string, PermissionDanger> = {
   '<all_urls>': { severity: 'critical', msg: 'Access to ALL websites' },
   '*://*/*': { severity: 'critical', msg: 'Access to ALL websites' },
   'http://*/*': { severity: 'warning', msg: 'Access to all HTTP sites' },
   'https://*/*': { severity: 'warning', msg: 'Access to all HTTPS sites' },
-  
-  // Critical - Sensitive data
   'cookies': { severity: 'warning', msg: 'Can read/write cookies (session hijacking risk)' },
   'webRequest': { severity: 'warning', msg: 'Can intercept network requests' },
   'webRequestBlocking': { severity: 'critical', msg: 'Can modify/block network requests' },
   'proxy': { severity: 'critical', msg: 'Can control proxy settings (MitM risk)' },
   'debugger': { severity: 'critical', msg: 'Full debugging access to tabs' },
   'nativeMessaging': { severity: 'critical', msg: 'Can communicate with native apps' },
-  
-  // Warning - Privacy concerns
   'tabs': { severity: 'info', msg: 'Can see all open tabs and URLs' },
   'history': { severity: 'warning', msg: 'Can read browsing history' },
   'bookmarks': { severity: 'info', msg: 'Can read/modify bookmarks' },
@@ -32,8 +28,6 @@ const DANGEROUS_PERMISSIONS = {
   'management': { severity: 'warning', msg: 'Can manage other extensions' },
   'privacy': { severity: 'warning', msg: 'Can modify privacy settings' },
   'browsingData': { severity: 'warning', msg: 'Can clear browsing data' },
-  
-  // Info - Common but notable
   'storage': { severity: 'info', msg: 'Can store data locally' },
   'clipboardRead': { severity: 'warning', msg: 'Can read clipboard' },
   'clipboardWrite': { severity: 'info', msg: 'Can write to clipboard' },
@@ -42,7 +36,7 @@ const DANGEROUS_PERMISSIONS = {
 };
 
 // Known suspicious patterns in extension code
-const SUSPICIOUS_PATTERNS = [
+const SUSPICIOUS_PATTERNS: SuspiciousPattern[] = [
   { pattern: /eval\s*\(/g, severity: 'critical', msg: 'Uses eval() - code injection risk' },
   { pattern: /new\s+Function\s*\(/g, severity: 'critical', msg: 'Uses Function constructor - code injection risk' },
   { pattern: /document\.write/g, severity: 'warning', msg: 'Uses document.write - XSS risk' },
@@ -53,53 +47,42 @@ const SUSPICIOUS_PATTERNS = [
   { pattern: /atob|btoa/g, severity: 'info', msg: 'Base64 encoding (check for obfuscation)' },
   { pattern: /crypto\.subtle/g, severity: 'info', msg: 'Uses Web Crypto API' },
   { pattern: /WebSocket\s*\(/g, severity: 'info', msg: 'Uses WebSocket connections' },
-  
-  // CSP Stripping Attack Patterns (GitLab Feb 2025)
-  // https://gitlab-com.gitlab.io/gl-security/security-tech-notes/threat-intelligence-tech-notes/malicious-browser-extensions-feb-2025/
   { pattern: /declarativeNetRequest\.updateSessionRules/g, severity: 'warning', msg: 'Modifies browser network rules dynamically' },
   { pattern: /content-security-policy.*operation.*set.*value.*['"]{2}/gi, severity: 'critical', msg: 'CSP stripping attack - removes Content Security Policy' },
   { pattern: /modifyHeaders.*responseHeaders.*content-security-policy/gi, severity: 'critical', msg: 'CSP header manipulation detected' },
   { pattern: /header.*content-security-policy.*operation.*remove/gi, severity: 'critical', msg: 'CSP header removal detected' },
   { pattern: /webRequest\.onBeforeRequest.*<all_urls>/g, severity: 'warning', msg: 'Intercepts all web requests' },
   { pattern: /webRequest\.onHeadersReceived.*blocking/g, severity: 'warning', msg: 'Modifies HTTP response headers' },
-  
-  // Dynamic config fetching (common in malicious extensions)
   { pattern: /chrome\.storage\.local\.set.*configUpdateInterval/g, severity: 'warning', msg: 'Dynamic config update pattern (potential C2)' },
   { pattern: /setInterval.*fetch.*chrome\.storage/g, severity: 'warning', msg: 'Periodic remote config fetch' },
-  
-  // Data exfiltration patterns
   { pattern: /chrome\.cookies\.getAll\s*\(\s*\{\s*\}/g, severity: 'critical', msg: 'Attempts to read all cookies' },
   { pattern: /document\.cookie.*fetch|fetch.*document\.cookie/g, severity: 'critical', msg: 'Cookie exfiltration pattern' },
   { pattern: /localStorage.*fetch|fetch.*localStorage/g, severity: 'warning', msg: 'LocalStorage exfiltration pattern' },
 ];
 
-// Known malicious extension IDs - loaded dynamically
-let KNOWN_MALICIOUS = null;
+let KNOWN_MALICIOUS: Set<string> | null = null;
 
-async function loadMaliciousDb(options = {}) {
+async function loadMaliciousDb(options: ScanOptions = {}): Promise<Set<string>> {
   if (KNOWN_MALICIOUS) return KNOWN_MALICIOUS;
   
   try {
-    const { getMaliciousIds } = require('../malicious-db.js');
+    const { getMaliciousIds } = await import('../malicious-db.js');
     KNOWN_MALICIOUS = await getMaliciousIds({ quiet: true, ...options });
     logger.debug(`Loaded ${KNOWN_MALICIOUS.size} malicious extension IDs`);
   } catch (err) {
-    logger.warn(`Failed to load malicious DB: ${err.message}`);
+    logger.warn(`Failed to load malicious DB: ${(err as Error).message}`);
     KNOWN_MALICIOUS = new Set();
   }
   
   return KNOWN_MALICIOUS;
 }
 
-/**
- * Get Chrome extension directories based on OS and browser type
- */
-function getExtensionPaths(options = {}) {
+function getExtensionPaths(options: ScanOptions = {}): string[] {
   const browserType = options.browserType || 'chrome';
   const platform = os.platform();
   const home = os.homedir();
   
-  const paths = {
+  const paths: Record<string, Record<string, string[]>> = {
     chrome: {
       darwin: [
         path.join(home, 'Library/Application Support/Google/Chrome'),
@@ -128,16 +111,12 @@ function getExtensionPaths(options = {}) {
   return paths[browserType]?.[platform] || [];
 }
 
-/**
- * Find all extension directories
- */
-function findExtensions(basePaths, options = {}) {
-  const extensions = [];
+function findExtensions(basePaths: string[], options: ScanOptions = {}): ExtensionInfo[] {
+  const extensions: ExtensionInfo[] = [];
   
   for (const basePath of basePaths) {
     if (!fs.existsSync(basePath)) continue;
     
-    // Check for profiles
     const profiles = ['Default', 'Profile 1', 'Profile 2', 'Profile 3'];
     if (options.profile) {
       profiles.unshift(options.profile);
@@ -153,7 +132,6 @@ function findExtensions(basePaths, options = {}) {
           const extPath = path.join(extensionsDir, extId);
           if (!fs.statSync(extPath).isDirectory()) continue;
           
-          // Get latest version
           const versions = fs.readdirSync(extPath).filter(v => {
             const vPath = path.join(extPath, v);
             return fs.statSync(vPath).isDirectory();
@@ -169,7 +147,7 @@ function findExtensions(basePaths, options = {}) {
           }
         }
       } catch (err) {
-        logger.debug(`Skipping inaccessible directory: ${extensionsDir}`, { error: err.message });
+        logger.debug(`Skipping inaccessible directory: ${extensionsDir}`, { error: (err as Error).message });
       }
     }
   }
@@ -177,10 +155,7 @@ function findExtensions(basePaths, options = {}) {
   return extensions;
 }
 
-/**
- * Parse manifest.json
- */
-function parseManifest(extPath) {
+function parseManifest(extPath: string): Manifest | null {
   const manifestPath = path.join(extPath, 'manifest.json');
   if (!fs.existsSync(manifestPath)) {
     logger.debug(`No manifest.json found at ${extPath}`);
@@ -189,18 +164,15 @@ function parseManifest(extPath) {
   
   try {
     const content = fs.readFileSync(manifestPath, 'utf-8');
-    return JSON.parse(content);
+    return JSON.parse(content) as Manifest;
   } catch (err) {
-    logger.warn(`Failed to parse manifest at ${manifestPath}: ${err.message}`);
+    logger.warn(`Failed to parse manifest at ${manifestPath}: ${(err as Error).message}`);
     return null;
   }
 }
 
-/**
- * Analyze extension permissions
- */
-function analyzePermissions(manifest, extInfo) {
-  const findings = [];
+function analyzePermissions(manifest: Manifest, extInfo: ExtensionInfo): Finding[] {
+  const findings: Finding[] = [];
   const allPermissions = [
     ...(manifest.permissions || []),
     ...(manifest.optional_permissions || []),
@@ -208,7 +180,6 @@ function analyzePermissions(manifest, extInfo) {
   ];
   
   for (const perm of allPermissions) {
-    // Check exact matches
     if (DANGEROUS_PERMISSIONS[perm]) {
       const danger = DANGEROUS_PERMISSIONS[perm];
       findings.push({
@@ -220,9 +191,7 @@ function analyzePermissions(manifest, extInfo) {
       });
     }
     
-    // Check URL patterns
     if (perm.includes('://') && !DANGEROUS_PERMISSIONS[perm]) {
-      // Count how many sites this matches
       if (perm.includes('*')) {
         findings.push({
           id: 'ext-perm-wildcard-host',
@@ -235,7 +204,6 @@ function analyzePermissions(manifest, extInfo) {
     }
   }
   
-  // Check for permission escalation (MV2 -> MV3 issues)
   if (manifest.manifest_version === 2) {
     findings.push({
       id: 'ext-mv2-deprecated',
@@ -249,17 +217,13 @@ function analyzePermissions(manifest, extInfo) {
   return findings;
 }
 
-/**
- * Analyze content scripts
- */
-function analyzeContentScripts(manifest, extInfo) {
-  const findings = [];
+function analyzeContentScripts(manifest: Manifest, extInfo: ExtensionInfo): Finding[] {
+  const findings: Finding[] = [];
   const contentScripts = manifest.content_scripts || [];
   
   for (const cs of contentScripts) {
     const matches = cs.matches || [];
     
-    // Check for overly broad content script injection
     if (matches.includes('<all_urls>') || matches.includes('*://*/*')) {
       findings.push({
         id: 'ext-cs-all-urls',
@@ -270,7 +234,6 @@ function analyzeContentScripts(manifest, extInfo) {
       });
     }
     
-    // Check run_at timing
     if (cs.run_at === 'document_start') {
       findings.push({
         id: 'ext-cs-document-start',
@@ -280,7 +243,6 @@ function analyzeContentScripts(manifest, extInfo) {
       });
     }
     
-    // Check for world: MAIN (can access page's JS context)
     if (cs.world === 'MAIN') {
       findings.push({
         id: 'ext-cs-main-world',
@@ -295,14 +257,9 @@ function analyzeContentScripts(manifest, extInfo) {
   return findings;
 }
 
-/**
- * Analyze background scripts/service worker
- */
-function analyzeBackground(manifest, extInfo, extPath) {
-  const findings = [];
-  
-  // Check for background scripts to analyze
-  let bgScripts = [];
+function analyzeBackground(manifest: Manifest, extInfo: ExtensionInfo, extPath: string): Finding[] {
+  const findings: Finding[] = [];
+  const bgScripts: string[] = [];
   
   if (manifest.background) {
     if (manifest.background.service_worker) {
@@ -313,7 +270,6 @@ function analyzeBackground(manifest, extInfo, extPath) {
     }
   }
   
-  // Analyze background script content
   for (const script of bgScripts) {
     const scriptPath = path.join(extPath, script);
     if (!fs.existsSync(scriptPath)) continue;
@@ -321,7 +277,6 @@ function analyzeBackground(manifest, extInfo, extPath) {
     try {
       const content = fs.readFileSync(scriptPath, 'utf-8');
       
-      // Check for suspicious patterns
       for (const pattern of SUSPICIOUS_PATTERNS) {
         const matches = content.match(pattern.pattern);
         if (matches) {
@@ -335,10 +290,8 @@ function analyzeBackground(manifest, extInfo, extPath) {
         }
       }
       
-      // Check for external URLs (potential C2)
       const urlMatches = content.match(/https?:\/\/[^\s"']+/g) || [];
       const externalUrls = urlMatches.filter(url => {
-        // Skip common legitimate domains
         const legitimate = [
           'chrome.google.com',
           'googleapis.com',
@@ -364,18 +317,15 @@ function analyzeBackground(manifest, extInfo, extPath) {
       }
       
     } catch (err) {
-      logger.debug(`Failed to analyze script ${script}: ${err.message}`);
+      logger.debug(`Failed to analyze script ${script}: ${(err as Error).message}`);
     }
   }
   
   return findings;
 }
 
-/**
- * Check against known malicious extensions
- */
-function checkKnownMalicious(extInfo, manifest) {
-  const findings = [];
+function checkKnownMalicious(extInfo: ExtensionInfo, manifest: Manifest): Finding[] {
+  const findings: Finding[] = [];
   
   if (KNOWN_MALICIOUS && KNOWN_MALICIOUS.has(extInfo.id)) {
     findings.push({
@@ -390,18 +340,13 @@ function checkKnownMalicious(extInfo, manifest) {
   return findings;
 }
 
-/**
- * Main Chrome scanner function
- */
-async function scanChrome(options = {}) {
-  const findings = [];
+export async function scanChrome(options: ScanOptions = {}): Promise<Finding[]> {
+  const findings: Finding[] = [];
   
   logger.debug('Starting Chrome scanner', { options: { ...options, quiet: undefined } });
   
-  // Load malicious DB
   await loadMaliciousDb(options);
   
-  // Get extension paths
   const basePaths = getExtensionPaths(options);
   logger.debug('Extension base paths', basePaths);
   
@@ -410,7 +355,6 @@ async function scanChrome(options = {}) {
     return findings;
   }
   
-  // Find all extensions
   const extensions = findExtensions(basePaths, options);
   logger.info(`  Found ${extensions.length} extensions`);
   logger.debug('Found extensions', extensions.map(e => ({ id: e.id, profile: e.profile })));
@@ -423,9 +367,8 @@ async function scanChrome(options = {}) {
     }
     
     logger.info(`  Scanning: ${manifest.name || ext.id}`);
-    logger.debug(`Extension details`, { id: ext.id, version: ext.version, path: ext.path });
+    logger.debug('Extension details', { id: ext.id, version: ext.version, path: ext.path });
     
-    // Run all analyzers
     findings.push(...checkKnownMalicious(ext, manifest));
     findings.push(...analyzePermissions(manifest, ext));
     findings.push(...analyzeContentScripts(manifest, ext));
@@ -435,5 +378,3 @@ async function scanChrome(options = {}) {
   logger.debug(`Scan complete, ${findings.length} findings`);
   return findings;
 }
-
-module.exports = { scanChrome };

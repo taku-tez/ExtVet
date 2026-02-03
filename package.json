@@ -1,20 +1,24 @@
 {
   "name": "browser-extvet",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Browser Extension Security Scanner - Vet your extensions before they vet your data",
-  "main": "src/index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "extvet": "bin/extvet.js"
   },
   "files": [
     "bin/",
-    "src/",
+    "dist/",
     "README.md"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js",
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "test": "npm run build && node --test test/*.test.js",
     "start": "node bin/extvet.js",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "clean": "rm -rf dist"
   },
   "keywords": [
     "browser-extension",
@@ -24,7 +28,8 @@
     "scanner",
     "manifest",
     "permissions",
-    "audit"
+    "audit",
+    "typescript"
   ],
   "author": "tez",
   "license": "MIT",
@@ -39,8 +44,8 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "dependencies": {
-    "node-fetch": "^3.3.0"
-  },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
 }

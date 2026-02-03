@@ -2,14 +2,18 @@
  * Logger - Verbose logging support for ExtVet
  */
 
+interface LoggerOptions {
+  verbose?: boolean;
+  quiet?: boolean;
+}
+
 let verboseEnabled = false;
 let quietMode = false;
 
 /**
  * Configure logger
- * @param {object} options - Logger options
  */
-function configure(options = {}) {
+export function configure(options: LoggerOptions = {}): void {
   verboseEnabled = options.verbose || false;
   quietMode = options.quiet || false;
 }
@@ -17,7 +21,7 @@ function configure(options = {}) {
 /**
  * Log info message (always shown unless quiet)
  */
-function info(message) {
+export function info(message: string): void {
   if (!quietMode) {
     console.log(message);
   }
@@ -26,7 +30,7 @@ function info(message) {
 /**
  * Log verbose/debug message (only with --verbose)
  */
-function debug(message, data = null) {
+export function debug(message: string, data: unknown = null): void {
   if (verboseEnabled) {
     const timestamp = new Date().toISOString().slice(11, 23);
     console.log(`[${timestamp}] DEBUG: ${message}`);
@@ -39,7 +43,7 @@ function debug(message, data = null) {
 /**
  * Log warning message
  */
-function warn(message) {
+export function warn(message: string): void {
   if (!quietMode) {
     console.warn(`⚠️  ${message}`);
   }
@@ -48,7 +52,7 @@ function warn(message) {
 /**
  * Log error message (always shown)
  */
-function error(message, err = null) {
+export function error(message: string, err: Error | null = null): void {
   console.error(`❌ ${message}`);
   if (verboseEnabled && err) {
     console.error(err.stack || err);
@@ -58,7 +62,7 @@ function error(message, err = null) {
 /**
  * Log success message
  */
-function success(message) {
+export function success(message: string): void {
   if (!quietMode) {
     console.log(`✅ ${message}`);
   }
@@ -67,11 +71,11 @@ function success(message) {
 /**
  * Check if verbose mode is enabled
  */
-function isVerbose() {
+export function isVerbose(): boolean {
   return verboseEnabled;
 }
 
-module.exports = {
+export default {
   configure,
   info,
   debug,
