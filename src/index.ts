@@ -10,7 +10,7 @@ import { applySeverityOverrides, filterIgnoredExtensions } from './config.js';
 import * as logger from './logger.js';
 import type { ScanOptions, ScanSummary, Finding, WebStoreResult } from './types.js';
 
-export const version = '0.5.0';
+export const version = '0.6.1';
 
 /**
  * Scan installed browser extensions
@@ -72,7 +72,8 @@ export async function scanUrl(target: string, options: ScanOptions = {}): Promis
   
   const result: WebStoreResult = await checkWebStore(target, {});
   
-  if (result.info) {
+  // Only print details in table format
+  if (result.info && options.format !== 'json' && options.format !== 'sarif') {
     console.log(`  Found: ${result.info.name}`);
     if (result.info.users) console.log(`  Users: ${result.info.users.toLocaleString()}`);
     if (result.info.rating) console.log(`  Rating: ${result.info.rating.toFixed(1)}/5`);
