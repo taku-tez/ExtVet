@@ -12,25 +12,10 @@ import {
   analyzePermissions,
   analyzeContentScripts,
   analyzeBackgroundScripts,
+  loadMaliciousDb,
+  checkKnownMalicious,
 } from '../analyzers.js';
 import type { Finding, ScanOptions, ExtensionInfo, Manifest } from '../types.js';
-
-let KNOWN_MALICIOUS: Set<string> | null = null;
-
-async function loadMaliciousDb(options: ScanOptions = {}): Promise<Set<string>> {
-  if (KNOWN_MALICIOUS) return KNOWN_MALICIOUS;
-  
-  try {
-    const { getMaliciousIds } = await import('../malicious-db.js');
-    KNOWN_MALICIOUS = await getMaliciousIds({ quiet: true, ...options });
-    logger.debug(`Loaded ${KNOWN_MALICIOUS.size} malicious extension IDs`);
-  } catch (err) {
-    logger.warn(`Failed to load malicious DB: ${(err as Error).message}`);
-    KNOWN_MALICIOUS = new Set();
-  }
-  
-  return KNOWN_MALICIOUS;
-}
 
 interface Profile {
   name: string;
@@ -263,21 +248,6 @@ function analyzeFirefoxSpecific(manifest: Manifest, extInfo: ExtensionInfo): Fin
 }
 
 /**
- * Check against known malicious add-ons
- */
-function checkKnownMalicious(extInfo: ExtensionInfo, manifest: Manifest | null): Finding[] {
-  if (!KNOWN_MALICIOUS?.has(extInfo.id)) return [];
-  
-  return [{
-    id: 'ff-known-malicious',
-    severity: 'critical',
-    extension: `${manifest?.name || extInfo.id} (${extInfo.id})`,
-    message: 'Add-on is flagged as KNOWN MALICIOUS',
-    recommendation: 'Remove this add-on immediately',
-  }];
-}
-
-/**
  * Main Firefox scanner function
  */
 export async function scanFirefox(options: ScanOptions = {}): Promise<Finding[]> {
@@ -333,7 +303,7 @@ export async function scanFirefox(options: ScanOptions = {}): Promise<Finding[]>
       logger.info(`  Scanning: ${manifest.name || ext.id}`);
       
       // Run analyzers
-      findings.push(...checkKnownMalicious(ext, manifest));
+      findings.push(...checkKnownMalicious(ext, manifest, 'ff'));
       findings.push(...analyzePermissions(manifest, ext, 'ff', FIREFOX_PERMISSIONS));
       findings.push(...analyzeContentScripts(manifest, ext, 'ff'));
       findings.push(...analyzeFirefoxSpecific(manifest, ext));

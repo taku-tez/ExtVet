@@ -13,25 +13,10 @@ import {
   analyzeBackgroundScripts,
   checkManifestVersion,
   parseManifest,
+  loadMaliciousDb,
+  checkKnownMalicious,
 } from '../analyzers.js';
-import type { Finding, ScanOptions, ExtensionInfo, Manifest } from '../types.js';
-
-let KNOWN_MALICIOUS: Set<string> | null = null;
-
-async function loadMaliciousDb(options: ScanOptions = {}): Promise<Set<string>> {
-  if (KNOWN_MALICIOUS) return KNOWN_MALICIOUS;
-  
-  try {
-    const { getMaliciousIds } = await import('../malicious-db.js');
-    KNOWN_MALICIOUS = await getMaliciousIds({ quiet: true, ...options });
-    logger.debug(`Loaded ${KNOWN_MALICIOUS.size} malicious extension IDs`);
-  } catch (err) {
-    logger.warn(`Failed to load malicious DB: ${(err as Error).message}`);
-    KNOWN_MALICIOUS = new Set();
-  }
-  
-  return KNOWN_MALICIOUS;
-}
+import type { Finding, ScanOptions, ExtensionInfo } from '../types.js';
 
 /**
  * Get extension paths based on OS and browser type
@@ -115,25 +100,6 @@ function findExtensions(basePaths: string[], options: ScanOptions = {}): Extensi
   }
   
   return extensions;
-}
-
-/**
- * Check against known malicious extensions
- */
-function checkKnownMalicious(extInfo: ExtensionInfo, manifest: Manifest): Finding[] {
-  const findings: Finding[] = [];
-  
-  if (KNOWN_MALICIOUS?.has(extInfo.id)) {
-    findings.push({
-      id: 'ext-known-malicious',
-      severity: 'critical',
-      extension: `${manifest.name} (${extInfo.id})`,
-      message: 'Extension is flagged as KNOWN MALICIOUS',
-      recommendation: 'Remove this extension immediately',
-    });
-  }
-  
-  return findings;
 }
 
 /**

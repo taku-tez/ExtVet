@@ -18,25 +18,11 @@ import {
   analyzeContentScripts,
   analyzeBackgroundScripts,
   checkManifestVersion,
+  loadMaliciousDb,
+  checkKnownMalicious,
+  parseManifest,
 } from '../analyzers.js';
 import type { Finding, ScanOptions, ExtensionInfo, Manifest } from '../types.js';
-
-let KNOWN_MALICIOUS: Set<string> | null = null;
-
-async function loadMaliciousDb(options: ScanOptions = {}): Promise<Set<string>> {
-  if (KNOWN_MALICIOUS) return KNOWN_MALICIOUS;
-  
-  try {
-    const { getMaliciousIds } = await import('../malicious-db.js');
-    KNOWN_MALICIOUS = await getMaliciousIds({ quiet: true, ...options });
-    logger.debug(`Loaded ${KNOWN_MALICIOUS.size} malicious extension IDs`);
-  } catch (err) {
-    logger.warn(`Failed to load malicious DB: ${(err as Error).message}`);
-    KNOWN_MALICIOUS = new Set();
-  }
-  
-  return KNOWN_MALICIOUS;
-}
 
 /**
  * Get Safari extension locations
@@ -172,26 +158,6 @@ function findAppexInApp(appPath: string): ExtensionInfo[] {
 }
 
 /**
- * Parse manifest.json from Safari Web Extension
- */
-function parseManifest(extPath: string): Manifest | null {
-  const manifestPath = path.join(extPath, 'manifest.json');
-  
-  if (!fs.existsSync(manifestPath)) {
-    logger.debug(`No manifest.json found at ${extPath}`);
-    return null;
-  }
-  
-  try {
-    const content = fs.readFileSync(manifestPath, 'utf-8');
-    return JSON.parse(content) as Manifest;
-  } catch (err) {
-    logger.warn(`Failed to parse manifest at ${manifestPath}: ${(err as Error).message}`);
-    return null;
-  }
-}
-
-/**
  * Extract and parse legacy .safariextz file
  */
 function parseLegacyExtension(extPath: string): { manifest: Manifest | null; extractedPath: string | null } {
@@ -295,21 +261,6 @@ function cleanupExtracted(extractedPath: string | null): void {
 }
 
 /**
- * Check against known malicious extensions
- */
-function checkKnownMalicious(extInfo: ExtensionInfo, manifest: Manifest): Finding[] {
-  if (!KNOWN_MALICIOUS?.has(extInfo.id)) return [];
-  
-  return [{
-    id: 'safari-known-malicious',
-    severity: 'critical',
-    extension: `${manifest.name || extInfo.id} (${extInfo.id})`,
-    message: 'Extension is flagged as KNOWN MALICIOUS',
-    recommendation: 'Remove this extension immediately',
-  }];
-}
-
-/**
  * Safari-specific analysis
  */
 function analyzeSafariSpecific(manifest: Manifest, extInfo: ExtensionInfo): Finding[] {
@@ -400,7 +351,7 @@ export async function scanSafari(options: ScanOptions = {}): Promise<Finding[]> 
     logger.info(`  Scanning: ${manifest.name || ext.id}`);
     
     // Run analyzers
-    findings.push(...checkKnownMalicious(ext, manifest));
+    findings.push(...checkKnownMalicious(ext, manifest, 'safari'));
     findings.push(...analyzePermissions(manifest, ext, 'safari'));
     findings.push(...analyzeContentScripts(manifest, ext, 'safari'));
     findings.push(...analyzeSafariSpecific(manifest, ext));

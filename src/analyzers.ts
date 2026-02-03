@@ -252,3 +252,46 @@ export function parseManifest(extPath: string): Manifest | null {
     return null;
   }
 }
+
+/**
+ * Shared malicious extension database cache
+ */
+let KNOWN_MALICIOUS: Set<string> | null = null;
+
+/**
+ * Load malicious extension database (shared across all scanners)
+ */
+export async function loadMaliciousDb(options: { quiet?: boolean } = {}): Promise<Set<string>> {
+  if (KNOWN_MALICIOUS) return KNOWN_MALICIOUS;
+  
+  try {
+    const { getMaliciousIds } = await import('./malicious-db.js');
+    KNOWN_MALICIOUS = await getMaliciousIds({ quiet: true, ...options });
+    logger.debug(`Loaded ${KNOWN_MALICIOUS.size} malicious extension IDs`);
+  } catch (err) {
+    logger.warn(`Failed to load malicious DB: ${(err as Error).message}`);
+    KNOWN_MALICIOUS = new Set();
+  }
+  
+  return KNOWN_MALICIOUS;
+}
+
+/**
+ * Check if extension is in known malicious database
+ */
+export function checkKnownMalicious(
+  extInfo: ExtensionInfo,
+  manifest: Manifest,
+  prefix: string = 'ext'
+): Finding[] {
+  if (!KNOWN_MALICIOUS?.has(extInfo.id)) return [];
+  
+  const extName = manifest.name || extInfo.id;
+  return [{
+    id: `${prefix}-known-malicious`,
+    severity: 'critical',
+    extension: `${extName} (${extInfo.id})`,
+    message: 'Extension is flagged as KNOWN MALICIOUS',
+    recommendation: 'Remove this extension immediately',
+  }];
+}
