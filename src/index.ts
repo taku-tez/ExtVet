@@ -4,13 +4,14 @@
 
 import { scanChrome } from './scanners/chrome.js';
 import { scanFirefox } from './scanners/firefox.js';
+import { scanSafari } from './scanners/safari.js';
 import { checkWebStore } from './webstore.js';
 import { Reporter } from './reporter.js';
 import { applySeverityOverrides, filterIgnoredExtensions } from './config.js';
 import * as logger from './logger.js';
 import type { ScanOptions, ScanSummary, Finding, WebStoreResult } from './types.js';
 
-export const version = '0.6.1';
+export const version = '0.7.0';
 
 /**
  * Scan installed browser extensions
@@ -39,6 +40,9 @@ export async function scan(browser: string, options: ScanOptions = {}): Promise<
       break;
     case 'firefox':
       findings = await scanFirefox(options);
+      break;
+    case 'safari':
+      findings = await scanSafari(options);
       break;
     default:
       throw new Error(`Unknown browser: ${browser}`);

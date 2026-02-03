@@ -14,7 +14,7 @@ ExtVet analyzes installed browser extensions for security risks, suspicious perm
 - 📜 **Manifest Inspection** - Check for deprecated Manifest V2, overly broad content scripts
 - 🕵️ **Code Analysis** - Find suspicious patterns like `eval()`, external connections
 - 🚨 **Known Malicious Detection** - Check against 164+ known malicious extension IDs (auto-updated)
-- 🌐 **Multi-Browser Support** - Chrome, Firefox, Brave, Edge
+- 🌐 **Multi-Browser Support** - Chrome, Firefox, Brave, Edge, Safari
 - 🔎 **Web Store Verification** - Check extensions against Chrome Web Store & Firefox Add-ons
 
 ## Installation
@@ -40,6 +40,7 @@ extvet scan
 extvet scan firefox
 extvet scan brave
 extvet scan edge
+extvet scan safari  # macOS only
 
 # Scan specific profile
 extvet scan chrome --profile "Profile 1"

@@ -36,6 +36,13 @@ describe('ExtVet Core', () => {
     assert.ok(typeof results === 'object');
     assert.ok('critical' in results);
   });
+  
+  test('scan safari returns object with summary', async () => {
+    // Will return empty on non-macOS, but should not error
+    const results = await scan('safari', { quiet: true });
+    assert.ok(typeof results === 'object');
+    assert.ok('critical' in results);
+  });
 
   test('unknown browser throws error', async () => {
     await assert.rejects(

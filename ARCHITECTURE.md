@@ -291,6 +291,13 @@ ExtVet maintains a database of known malicious extension IDs:
 - Same as Chrome, different path
 - Path: `~/.config/microsoft-edge/`
 
+### Safari (macOS only)
+
+- Legacy extensions: `~/Library/Safari/Extensions/*.safariextz`
+- Modern Web Extensions: Inside `.app/Contents/PlugIns/*.appex/Contents/Resources/`
+- App Store extensions: Inside containers
+- Format: xar archive (legacy) or appex bundle (modern)
+
 ## Output Formats
 
 ### Table (Default)

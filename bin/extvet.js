@@ -30,6 +30,7 @@ Browsers:
   firefox             Mozilla Firefox
   edge                Microsoft Edge
   brave               Brave Browser
+  safari              Safari (macOS only)
 
 Options:
   --profile <path>    Browser profile path
