@@ -8,30 +8,12 @@ import * as path from 'path';
 import { extractCrx, cleanupExtracted as cleanupCrx } from './crx-extractor.js';
 import { extractXpi, cleanupExtracted as cleanupXpi } from './xpi-extractor.js';
 import { Reporter } from './reporter.js';
-import type { Finding, ScanOptions, ScanSummary, Manifest, PermissionDanger, SuspiciousPattern } from './types.js';
-
-const DANGEROUS_PERMISSIONS: Record<string, PermissionDanger> = {
-  '<all_urls>': { severity: 'critical', msg: 'Access to ALL websites' },
-  '*://*/*': { severity: 'critical', msg: 'Access to ALL websites' },
-  'webRequestBlocking': { severity: 'critical', msg: 'Can modify/block network requests' },
-  'nativeMessaging': { severity: 'critical', msg: 'Can communicate with native apps' },
-  'debugger': { severity: 'critical', msg: 'Full debugging access to tabs' },
-  'proxy': { severity: 'critical', msg: 'Can control proxy settings' },
-  'cookies': { severity: 'warning', msg: 'Can read/write cookies' },
-  'history': { severity: 'warning', msg: 'Can read browsing history' },
-  'webRequest': { severity: 'warning', msg: 'Can intercept network requests' },
-  'management': { severity: 'warning', msg: 'Can manage other extensions' },
-  'tabs': { severity: 'info', msg: 'Can see all open tabs' },
-  'storage': { severity: 'info', msg: 'Can store data locally' },
-};
-
-const SUSPICIOUS_PATTERNS: SuspiciousPattern[] = [
-  { pattern: /eval\s*\(/g, severity: 'critical', msg: 'Uses eval() - code injection risk' },
-  { pattern: /new\s+Function\s*\(/g, severity: 'critical', msg: 'Uses Function constructor' },
-  { pattern: /document\.write/g, severity: 'warning', msg: 'Uses document.write - XSS risk' },
-  { pattern: /innerHTML\s*=/g, severity: 'info', msg: 'Uses innerHTML - potential XSS' },
-  { pattern: /fetch\s*\(['"](http:\/\/)/g, severity: 'warning', msg: 'Insecure HTTP fetch' },
-];
+import {
+  analyzePermissions,
+  analyzeScriptContent,
+  checkManifestVersion,
+} from './analyzers.js';
+import type { ScanOptions, ScanSummary, Manifest, Finding } from './types.js';
 
 /**
  * Scan a local extension file
@@ -52,6 +34,7 @@ export async function scanFile(filePath: string, options: ScanOptions = {}): Pro
   let extractedPath: string | null = null;
   let cleanupFn: ((p: string) => void) | null = null;
   
+  // Extract based on file type
   if (ext === '.crx') {
     extractedPath = extractCrx(filePath);
     cleanupFn = cleanupCrx;
@@ -79,54 +62,19 @@ export async function scanFile(filePath: string, options: ScanOptions = {}): Pro
     console.log(`  Name: ${manifest.name || 'Unknown'}`);
     console.log(`  Version: ${manifest.version || 'Unknown'}`);
     
-    const allPermissions = [
-      ...(manifest.permissions || []),
-      ...(manifest.optional_permissions || []),
-      ...(manifest.host_permissions || []),
-    ];
+    const extInfo = { id: fileName, path: extractedPath };
     
-    for (const perm of allPermissions) {
-      if (DANGEROUS_PERMISSIONS[perm]) {
-        const danger = DANGEROUS_PERMISSIONS[perm];
-        findings.push({
-          id: `file-perm-${perm.replace(/[^a-z]/gi, '-')}`,
-          severity: danger.severity,
-          extension: manifest.name || fileName,
-          message: `Permission: ${perm} - ${danger.msg}`,
-          recommendation: `Review if "${perm}" permission is necessary`,
-        });
-      }
-    }
+    // Run analyzers
+    findings.push(...analyzePermissions(manifest, extInfo, 'file'));
+    findings.push(...checkManifestVersion(manifest, extInfo, 'file'));
     
-    if (manifest.manifest_version === 2) {
-      findings.push({
-        id: 'file-mv2-deprecated',
-        severity: 'warning',
-        extension: manifest.name || fileName,
-        message: 'Uses Manifest V2 (deprecated)',
-        recommendation: 'Update to Manifest V3',
-      });
-    }
-    
+    // Scan JavaScript files
     const jsFiles = findJsFiles(extractedPath);
-    
     for (const jsFile of jsFiles) {
       try {
         const content = fs.readFileSync(jsFile, 'utf-8');
         const relPath = path.relative(extractedPath, jsFile);
-        
-        for (const pattern of SUSPICIOUS_PATTERNS) {
-          const matches = content.match(pattern.pattern);
-          if (matches) {
-            findings.push({
-              id: `file-code-${pattern.msg.replace(/[^a-z]/gi, '-').toLowerCase()}`,
-              severity: pattern.severity,
-              extension: manifest.name || fileName,
-              message: `${pattern.msg} in ${relPath}`,
-              recommendation: 'Review the code for security issues',
-            });
-          }
-        }
+        findings.push(...analyzeScriptContent(content, relPath, extInfo, manifest, 'file'));
       } catch {
         // Skip unreadable files
       }
@@ -138,20 +86,20 @@ export async function scanFile(filePath: string, options: ScanOptions = {}): Pro
     }
   }
   
-  const summary = reporter.report(findings, options);
-  return summary;
+  return reporter.report(findings, options);
 }
 
+/**
+ * Recursively find JavaScript files
+ */
 function findJsFiles(dir: string, files: string[] = []): string[] {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     
-    if (entry.isDirectory()) {
-      if (entry.name !== 'node_modules' && entry.name !== '.git') {
-        findJsFiles(fullPath, files);
-      }
+    if (entry.isDirectory() && entry.name !== 'node_modules' && entry.name !== '.git') {
+      findJsFiles(fullPath, files);
     } else if (entry.isFile() && entry.name.endsWith('.js')) {
       files.push(fullPath);
     }

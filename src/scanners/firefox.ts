@@ -7,52 +7,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as logger from '../logger.js';
-import type { Finding, ScanOptions, ExtensionInfo, Manifest, PermissionDanger, SuspiciousPattern } from '../types.js';
-
-const DANGEROUS_PERMISSIONS: Record<string, PermissionDanger> = {
-  '<all_urls>': { severity: 'critical', msg: 'Access to ALL websites' },
-  '*://*/*': { severity: 'critical', msg: 'Access to ALL websites' },
-  'http://*/*': { severity: 'warning', msg: 'Access to all HTTP sites' },
-  'https://*/*': { severity: 'warning', msg: 'Access to all HTTPS sites' },
-  'cookies': { severity: 'warning', msg: 'Can read/write cookies (session hijacking risk)' },
-  'webRequest': { severity: 'warning', msg: 'Can intercept network requests' },
-  'webRequestBlocking': { severity: 'critical', msg: 'Can modify/block network requests' },
-  'webRequestFilterResponse': { severity: 'critical', msg: 'Can filter response bodies' },
-  'proxy': { severity: 'critical', msg: 'Can control proxy settings (MitM risk)' },
-  'nativeMessaging': { severity: 'critical', msg: 'Can communicate with native apps' },
-  'browserSettings': { severity: 'warning', msg: 'Can modify browser settings' },
-  'dns': { severity: 'critical', msg: 'Can perform DNS resolution' },
-  'pkcs11': { severity: 'critical', msg: 'Can access PKCS #11 security modules' },
-  'tabs': { severity: 'info', msg: 'Can see all open tabs and URLs' },
-  'history': { severity: 'warning', msg: 'Can read browsing history' },
-  'bookmarks': { severity: 'info', msg: 'Can read/modify bookmarks' },
-  'downloads': { severity: 'info', msg: 'Can access downloads' },
-  'management': { severity: 'warning', msg: 'Can manage other extensions' },
-  'privacy': { severity: 'warning', msg: 'Can modify privacy settings' },
-  'browsingData': { severity: 'warning', msg: 'Can clear browsing data' },
-  'sessions': { severity: 'warning', msg: 'Can access session data' },
-  'geckoProfiler': { severity: 'critical', msg: 'Can access the Gecko profiler' },
-  'contextualIdentities': { severity: 'warning', msg: 'Can access container tabs' },
-  'storage': { severity: 'info', msg: 'Can store data locally' },
-  'clipboardRead': { severity: 'warning', msg: 'Can read clipboard' },
-  'clipboardWrite': { severity: 'info', msg: 'Can write to clipboard' },
-  'geolocation': { severity: 'warning', msg: 'Can access location' },
-  'notifications': { severity: 'info', msg: 'Can show notifications' },
-};
-
-const SUSPICIOUS_PATTERNS: SuspiciousPattern[] = [
-  { pattern: /eval\s*\(/g, severity: 'critical', msg: 'Uses eval() - code injection risk' },
-  { pattern: /new\s+Function\s*\(/g, severity: 'critical', msg: 'Uses Function constructor - code injection risk' },
-  { pattern: /document\.write/g, severity: 'warning', msg: 'Uses document.write - XSS risk' },
-  { pattern: /innerHTML\s*=/g, severity: 'info', msg: 'Uses innerHTML - potential XSS' },
-  { pattern: /browser\.runtime\.sendMessage.*\*:\/\//g, severity: 'warning', msg: 'External message passing' },
-  { pattern: /fetch\s*\(['"](http:\/\/)/g, severity: 'warning', msg: 'Insecure HTTP fetch' },
-  { pattern: /XMLHttpRequest.*http:/g, severity: 'warning', msg: 'Insecure HTTP XHR' },
-  { pattern: /atob|btoa/g, severity: 'info', msg: 'Base64 encoding (check for obfuscation)' },
-  { pattern: /crypto\.subtle/g, severity: 'info', msg: 'Uses Web Crypto API' },
-  { pattern: /WebSocket\s*\(/g, severity: 'info', msg: 'Uses WebSocket connections' },
-  { pattern: /browser\.webRequest\.filterResponseData/g, severity: 'warning', msg: 'Filters response data' },
-];
+import { FIREFOX_PERMISSIONS, FIREFOX_PATTERNS } from '../constants.js';
+import {
+  analyzePermissions,
+  analyzeContentScripts,
+  analyzeBackgroundScripts,
+} from '../analyzers.js';
+import type { Finding, ScanOptions, ExtensionInfo, Manifest } from '../types.js';
 
 let KNOWN_MALICIOUS: Set<string> | null = null;
 
@@ -71,6 +32,29 @@ async function loadMaliciousDb(options: ScanOptions = {}): Promise<Set<string>> 
   return KNOWN_MALICIOUS;
 }
 
+interface Profile {
+  name: string;
+  path: string;
+}
+
+interface ExtensionsJson {
+  addons?: Array<{
+    id: string;
+    type: string;
+    path?: string;
+    version?: string;
+    defaultLocale?: { name?: string };
+  }>;
+}
+
+interface ParseOptions {
+  _extractedPath?: string;
+  _actualPath?: string;
+}
+
+/**
+ * Get Firefox profile paths based on OS
+ */
 function getFirefoxPaths(): string[] {
   const platform = os.platform();
   const home = os.homedir();
@@ -88,11 +72,9 @@ function getFirefoxPaths(): string[] {
   return paths[platform] || [];
 }
 
-interface Profile {
-  name: string;
-  path: string;
-}
-
+/**
+ * Find Firefox profiles
+ */
 function findProfiles(basePaths: string[]): Profile[] {
   const profiles: Profile[] = [];
   
@@ -101,12 +83,9 @@ function findProfiles(basePaths: string[]): Profile[] {
     
     try {
       const entries = fs.readdirSync(basePath);
-      
       for (const entry of entries) {
         const profilePath = path.join(basePath, entry);
-        if (!fs.statSync(profilePath).isDirectory()) continue;
-        
-        if (entry.includes('.')) {
+        if (fs.statSync(profilePath).isDirectory() && entry.includes('.')) {
           profiles.push({ name: entry, path: profilePath });
         }
       }
@@ -118,24 +97,17 @@ function findProfiles(basePaths: string[]): Profile[] {
   return profiles;
 }
 
-interface ExtensionsJson {
-  addons?: Array<{
-    id: string;
-    type: string;
-    path?: string;
-    version?: string;
-    defaultLocale?: { name?: string };
-  }>;
-}
-
+/**
+ * Find extensions in a Firefox profile
+ */
 function findExtensions(profilePath: string): ExtensionInfo[] {
   const extensions: ExtensionInfo[] = [];
   const extensionsPath = path.join(profilePath, 'extensions');
   
+  // Scan extensions directory
   if (fs.existsSync(extensionsPath)) {
     try {
       const entries = fs.readdirSync(extensionsPath);
-      
       for (const entry of entries) {
         const extPath = path.join(extensionsPath, entry);
         const stat = fs.statSync(extPath);
@@ -151,13 +123,12 @@ function findExtensions(profilePath: string): ExtensionInfo[] {
     }
   }
   
+  // Check extensions.json for additional extensions
   const extensionsJsonPath = path.join(profilePath, 'extensions.json');
   if (fs.existsSync(extensionsJsonPath)) {
     try {
       const extJson = JSON.parse(fs.readFileSync(extensionsJsonPath, 'utf-8')) as ExtensionsJson;
-      const addons = extJson.addons || [];
-      
-      for (const addon of addons) {
+      for (const addon of extJson.addons || []) {
         if (addon.type === 'extension' && addon.path) {
           const exists = extensions.some(e => e.id === addon.id);
           if (!exists && fs.existsSync(addon.path)) {
@@ -172,18 +143,16 @@ function findExtensions(profilePath: string): ExtensionInfo[] {
         }
       }
     } catch (err) {
-      logger.debug(`Failed to parse extensions.json: ${extensionsJsonPath}`, { error: (err as Error).message });
+      logger.debug(`Failed to parse extensions.json`, { error: (err as Error).message });
     }
   }
   
   return extensions;
 }
 
-interface ParseOptions {
-  _extractedPath?: string;
-  _actualPath?: string;
-}
-
+/**
+ * Parse manifest from XPI or directory
+ */
 function parseManifest(extPath: string, extType: string | undefined, options: ParseOptions = {}): Manifest | null {
   let manifestPath: string;
   let extractedPath: string | null = null;
@@ -209,13 +178,7 @@ function parseManifest(extPath: string, extType: string | undefined, options: Pa
   }
   
   if (!fs.existsSync(manifestPath)) {
-    if (extractedPath) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { cleanupExtracted } = require('../xpi-extractor.js') as { cleanupExtracted: (p: string) => void };
-        cleanupExtracted(extractedPath);
-      } catch { /* Cleanup failure is non-critical */ }
-    }
+    cleanupExtracted(extractedPath);
     return null;
   }
   
@@ -228,48 +191,28 @@ function parseManifest(extPath: string, extType: string | undefined, options: Pa
     return manifest;
   } catch (err) {
     logger.warn(`Failed to parse manifest at ${manifestPath}: ${(err as Error).message}`);
-    if (extractedPath) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { cleanupExtracted } = require('../xpi-extractor.js') as { cleanupExtracted: (p: string) => void };
-        cleanupExtracted(extractedPath);
-      } catch { /* Cleanup failure is non-critical */ }
-    }
+    cleanupExtracted(extractedPath);
     return null;
   }
 }
 
-function analyzePermissions(manifest: Manifest, extInfo: ExtensionInfo): Finding[] {
+function cleanupExtracted(extractedPath: string | null): void {
+  if (!extractedPath) return;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { cleanupExtracted } = require('../xpi-extractor.js') as { cleanupExtracted: (p: string) => void };
+    cleanupExtracted(extractedPath);
+  } catch { /* ignore */ }
+}
+
+/**
+ * Firefox-specific permission analysis
+ */
+function analyzeFirefoxSpecific(manifest: Manifest, extInfo: ExtensionInfo): Finding[] {
   const findings: Finding[] = [];
-  const allPermissions = [
-    ...(manifest.permissions || []),
-    ...(manifest.optional_permissions || []),
-    ...(manifest.host_permissions || []),
-  ];
+  const extName = manifest.name || extInfo.id;
   
-  for (const perm of allPermissions) {
-    if (DANGEROUS_PERMISSIONS[perm]) {
-      const danger = DANGEROUS_PERMISSIONS[perm];
-      findings.push({
-        id: `ff-perm-${perm.replace(/[^a-z]/gi, '-')}`,
-        severity: danger.severity,
-        extension: `${manifest.name || extInfo.id} (${extInfo.id})`,
-        message: `Permission: ${perm} - ${danger.msg}`,
-        recommendation: `Review if "${perm}" permission is necessary`,
-      });
-    }
-    
-    if (perm.includes('://') && !DANGEROUS_PERMISSIONS[perm] && perm.includes('*')) {
-      findings.push({
-        id: 'ff-perm-wildcard-host',
-        severity: 'info',
-        extension: `${manifest.name || extInfo.id} (${extInfo.id})`,
-        message: `Host permission: ${perm}`,
-        recommendation: 'Verify this host access is expected',
-      });
-    }
-  }
-  
+  // Check browser_specific_settings
   if (manifest.browser_specific_settings?.gecko) {
     const gecko = manifest.browser_specific_settings.gecko;
     if (gecko.strict_min_version) {
@@ -278,7 +221,7 @@ function analyzePermissions(manifest: Manifest, extInfo: ExtensionInfo): Finding
         findings.push({
           id: 'ff-old-min-version',
           severity: 'info',
-          extension: `${manifest.name || extInfo.id} (${extInfo.id})`,
+          extension: `${extName} (${extInfo.id})`,
           message: `Targets Firefox ${gecko.strict_min_version}+ (may be outdated)`,
           recommendation: 'Check if extension is actively maintained',
         });
@@ -286,78 +229,23 @@ function analyzePermissions(manifest: Manifest, extInfo: ExtensionInfo): Finding
     }
   }
   
+  // Check legacy applications key
   if (manifest.applications?.gecko) {
     findings.push({
       id: 'ff-legacy-applications',
       severity: 'info',
-      extension: `${manifest.name || extInfo.id} (${extInfo.id})`,
+      extension: `${extName} (${extInfo.id})`,
       message: 'Uses legacy "applications" key instead of "browser_specific_settings"',
     });
   }
   
-  return findings;
-}
-
-function analyzeContentScripts(manifest: Manifest, extInfo: ExtensionInfo): Finding[] {
-  const findings: Finding[] = [];
-  const contentScripts = manifest.content_scripts || [];
-  
-  for (const cs of contentScripts) {
-    const matches = cs.matches || [];
-    
-    if (matches.includes('<all_urls>') || matches.includes('*://*/*')) {
-      findings.push({
-        id: 'ff-cs-all-urls',
-        severity: 'warning',
-        extension: `${manifest.name || extInfo.id} (${extInfo.id})`,
-        message: 'Content script injects into ALL pages',
-        recommendation: 'Limit content script to specific domains if possible',
-      });
-    }
-    
-    if (cs.run_at === 'document_start') {
-      findings.push({
-        id: 'ff-cs-document-start',
-        severity: 'info',
-        extension: `${manifest.name || extInfo.id} (${extInfo.id})`,
-        message: 'Content script runs at document_start',
-      });
-    }
-    
-    if (cs.match_about_blank) {
-      findings.push({
-        id: 'ff-cs-about-blank',
-        severity: 'info',
-        extension: `${manifest.name || extInfo.id} (${extInfo.id})`,
-        message: 'Content script can run in about:blank frames',
-      });
-    }
-  }
-  
-  return findings;
-}
-
-function analyzeBackground(manifest: Manifest, extInfo: ExtensionInfo, extPath: string): Finding[] {
-  const findings: Finding[] = [];
-  
-  if (extInfo.type === 'xpi') {
-    return findings;
-  }
-  
-  const bgScripts: string[] = [];
-  
+  // Check background settings
   if (manifest.background) {
-    if (manifest.background.scripts) {
-      bgScripts.push(...manifest.background.scripts);
-    }
-    if (manifest.background.service_worker) {
-      bgScripts.push(manifest.background.service_worker);
-    }
     if (manifest.background.page) {
       findings.push({
         id: 'ff-bg-page',
         severity: 'info',
-        extension: `${manifest.name || extInfo.id} (${extInfo.id})`,
+        extension: `${extName} (${extInfo.id})`,
         message: 'Uses background page (persistent background)',
       });
     }
@@ -365,79 +253,37 @@ function analyzeBackground(manifest: Manifest, extInfo: ExtensionInfo, extPath: 
       findings.push({
         id: 'ff-bg-persistent',
         severity: 'info',
-        extension: `${manifest.name || extInfo.id} (${extInfo.id})`,
+        extension: `${extName} (${extInfo.id})`,
         message: 'Uses persistent background script (higher resource usage)',
       });
     }
   }
   
-  for (const script of bgScripts) {
-    const scriptPath = path.join(extPath, script);
-    if (!fs.existsSync(scriptPath)) continue;
-    
-    try {
-      const content = fs.readFileSync(scriptPath, 'utf-8');
-      
-      for (const pattern of SUSPICIOUS_PATTERNS) {
-        const matches = content.match(pattern.pattern);
-        if (matches) {
-          findings.push({
-            id: `ff-code-${pattern.msg.replace(/[^a-z]/gi, '-').toLowerCase()}`,
-            severity: pattern.severity,
-            extension: `${manifest.name || extInfo.id} (${extInfo.id})`,
-            message: `${pattern.msg} in ${script}`,
-            recommendation: 'Review the code for potential security issues',
-          });
-        }
-      }
-      
-      const urlMatches = content.match(/https?:\/\/[^\s"']+/g) || [];
-      const externalUrls = urlMatches.filter(url => {
-        const legitimate = [
-          'addons.mozilla.org', 'mozilla.org', 'mozilla.net', 'firefox.com',
-          'github.com', 'githubusercontent.com', 'cloudflare.com', 'cdn.jsdelivr.net',
-        ];
-        return !legitimate.some(d => url.includes(d));
-      });
-      
-      if (externalUrls.length > 0) {
-        findings.push({
-          id: 'ff-external-urls',
-          severity: 'info',
-          extension: `${manifest.name || extInfo.id} (${extInfo.id})`,
-          message: `Connects to external URLs: ${externalUrls.slice(0, 3).join(', ')}${externalUrls.length > 3 ? '...' : ''}`,
-          recommendation: 'Verify these external connections are expected',
-        });
-      }
-      
-    } catch (err) {
-      logger.debug(`Failed to analyze script ${script}: ${(err as Error).message}`);
-    }
-  }
-  
   return findings;
 }
 
+/**
+ * Check against known malicious add-ons
+ */
 function checkKnownMalicious(extInfo: ExtensionInfo, manifest: Manifest | null): Finding[] {
-  const findings: Finding[] = [];
+  if (!KNOWN_MALICIOUS?.has(extInfo.id)) return [];
   
-  if (KNOWN_MALICIOUS && KNOWN_MALICIOUS.has(extInfo.id)) {
-    findings.push({
-      id: 'ff-known-malicious',
-      severity: 'critical',
-      extension: `${manifest?.name || extInfo.id} (${extInfo.id})`,
-      message: 'Add-on is flagged as KNOWN MALICIOUS',
-      recommendation: 'Remove this add-on immediately',
-    });
-  }
-  
-  return findings;
+  return [{
+    id: 'ff-known-malicious',
+    severity: 'critical',
+    extension: `${manifest?.name || extInfo.id} (${extInfo.id})`,
+    message: 'Add-on is flagged as KNOWN MALICIOUS',
+    recommendation: 'Remove this add-on immediately',
+  }];
 }
 
+/**
+ * Main Firefox scanner function
+ */
 export async function scanFirefox(options: ScanOptions = {}): Promise<Finding[]> {
   const findings: Finding[] = [];
   
-  logger.debug('Starting Firefox scanner', { options: { ...options, quiet: undefined } });
+  logger.debug('Starting Firefox scanner');
   
   await loadMaliciousDb(options);
   
@@ -456,7 +302,6 @@ export async function scanFirefox(options: ScanOptions = {}): Promise<Finding[]>
   }
   
   logger.info(`  Found ${profiles.length} Firefox profiles`);
-  logger.debug('Found profiles', profiles.map(p => p.name));
   
   let totalExtensions = 0;
   
@@ -486,20 +331,20 @@ export async function scanFirefox(options: ScanOptions = {}): Promise<Finding[]>
       }
       
       logger.info(`  Scanning: ${manifest.name || ext.id}`);
-      logger.debug('Extension details', { id: ext.id, type: ext.type, path: ext.path });
       
+      // Run analyzers
       findings.push(...checkKnownMalicious(ext, manifest));
-      findings.push(...analyzePermissions(manifest, ext));
-      findings.push(...analyzeContentScripts(manifest, ext));
-      findings.push(...analyzeBackground(manifest, ext, scanPath));
+      findings.push(...analyzePermissions(manifest, ext, 'ff', FIREFOX_PERMISSIONS));
+      findings.push(...analyzeContentScripts(manifest, ext, 'ff'));
+      findings.push(...analyzeFirefoxSpecific(manifest, ext));
       
-      if (parseOptions._extractedPath) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { cleanupExtracted } = require('../xpi-extractor.js') as { cleanupExtracted: (p: string) => void };
-          cleanupExtracted(parseOptions._extractedPath);
-        } catch { /* Cleanup failure is non-critical */ }
+      // Only analyze scripts for unpacked extensions
+      if (ext.type !== 'xpi') {
+        findings.push(...analyzeBackgroundScripts(manifest, ext, scanPath, 'ff', FIREFOX_PATTERNS));
       }
+      
+      // Cleanup extracted XPI
+      cleanupExtracted(parseOptions._extractedPath || null);
     }
   }
   
