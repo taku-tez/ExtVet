@@ -6,8 +6,10 @@ const { scanChrome } = require('./scanners/chrome.js');
 const { scanFirefox } = require('./scanners/firefox.js');
 const { checkWebStore } = require('./webstore.js');
 const { Reporter } = require('./reporter.js');
+const { applySeverityOverrides, filterIgnoredExtensions } = require('./config.js');
+const logger = require('./logger.js');
 
-const version = '0.4.0';
+const version = '0.5.0';
 
 /**
  * Scan installed browser extensions
@@ -16,6 +18,9 @@ const version = '0.4.0';
  * @returns {object} Scan results
  */
 async function scan(browser, options = {}) {
+  // Configure logger for this scan
+  logger.configure(options);
+  
   const reporter = new Reporter(options);
   
   reporter.start(`Scanning ${browser} extensions...`);
@@ -40,6 +45,19 @@ async function scan(browser, options = {}) {
       break;
     default:
       throw new Error(`Unknown browser: ${browser}`);
+  }
+
+  // Apply config-based filtering
+  if (options.ignoreExtensions) {
+    const before = findings.length;
+    findings = filterIgnoredExtensions(findings, options.ignoreExtensions);
+    logger.debug(`Filtered ignored extensions: ${before} -> ${findings.length} findings`);
+  }
+  
+  // Apply severity overrides
+  if (options.severityOverrides) {
+    findings = applySeverityOverrides(findings, options.severityOverrides);
+    logger.debug('Applied severity overrides');
   }
 
   const summary = reporter.report(findings, options);

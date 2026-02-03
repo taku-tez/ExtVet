@@ -6,6 +6,8 @@
  */
 
 const { scan, scanUrl, version } = require('../src/index.js');
+const logger = require('../src/logger.js');
+const { loadConfig, mergeConfig } = require('../src/config.js');
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -34,12 +36,23 @@ Options:
   --format <type>     Output format (table, json, sarif)
   --output <file>     Output file path
   --quiet             Suppress non-essential output
+  --verbose           Enable debug output
   --severity <level>  Minimum severity to report (info, warning, critical)
+  --config <file>     Config file path (default: .extvetrc)
+
+Config file (.extvetrc):
+  {
+    "ignoreExtensions": ["extension-id-1", "extension-id-2"],
+    "severityOverrides": { "ext-perm-tabs": "warning" },
+    "browser": "chrome",
+    "format": "table"
+  }
 
 Examples:
   extvet scan                                   # Scan Chrome extensions
   extvet scan firefox                           # Scan Firefox addons
   extvet scan chrome --profile "Profile 1"     # Scan specific profile
+  extvet scan --verbose                        # Scan with debug output
   extvet check nkbihfbeogaeaoehlefnkodbefgpgknn # Check MetaMask by ID
   extvet check https://chrome.google.com/webstore/detail/xxx
 `);
@@ -56,6 +69,9 @@ async function main() {
     process.exit(0);
   }
 
+  // Load config file first
+  const fileConfig = loadConfig();
+  
   if (command === 'update') {
     console.log('🦅 ExtVet - Updating malicious extension database...\n');
     try {
@@ -70,14 +86,18 @@ async function main() {
   }
 
   if (command === 'scan') {
-    const browser = args[1] && !args[1].startsWith('-') ? args[1] : 'chrome';
-    const options = parseOptions(args.slice(args[1]?.startsWith('-') ? 1 : 2));
+    const browser = args[1] && !args[1].startsWith('-') ? args[1] : (fileConfig.browser || 'chrome');
+    const cliOptions = parseOptions(args.slice(args[1]?.startsWith('-') ? 1 : 2));
+    const options = mergeConfig(fileConfig, cliOptions);
+    
+    // Configure logger
+    logger.configure(options);
     
     try {
       const results = await scan(browser, options);
       process.exit(results.critical > 0 ? 1 : 0);
     } catch (error) {
-      console.error(`Error: ${error.message}`);
+      logger.error(`Scan failed: ${error.message}`, error);
       process.exit(1);
     }
   }
@@ -89,13 +109,17 @@ async function main() {
       process.exit(1);
     }
     
-    const options = parseOptions(args.slice(2));
+    const cliOptions = parseOptions(args.slice(2));
+    const options = mergeConfig(fileConfig, cliOptions);
+    
+    // Configure logger
+    logger.configure(options);
     
     try {
       const results = await scanUrl(target, options);
       process.exit(results.critical > 0 ? 1 : 0);
     } catch (error) {
-      console.error(`Error: ${error.message}`);
+      logger.error(`Check failed: ${error.message}`, error);
       process.exit(1);
     }
   }
@@ -107,14 +131,18 @@ async function main() {
       process.exit(1);
     }
     
-    const options = parseOptions(args.slice(2));
+    const cliOptions = parseOptions(args.slice(2));
+    const options = mergeConfig(fileConfig, cliOptions);
+    
+    // Configure logger
+    logger.configure(options);
     
     try {
       const { scanFile } = require('../src/file-scanner.js');
       const results = await scanFile(filePath, options);
       process.exit(results.critical > 0 ? 1 : 0);
     } catch (error) {
-      console.error(`Error: ${error.message}`);
+      logger.error(`File scan failed: ${error.message}`, error);
       process.exit(1);
     }
   }
@@ -135,11 +163,18 @@ function parseOptions(args) {
       options.output = args[++i];
     } else if (args[i] === '--severity' && args[i + 1]) {
       options.severity = args[++i];
-    } else if (args[i] === '--quiet') {
+    } else if (args[i] === '--config' && args[i + 1]) {
+      options.configPath = args[++i];
+    } else if (args[i] === '--quiet' || args[i] === '-q') {
       options.quiet = true;
+    } else if (args[i] === '--verbose' || args[i] === '-v') {
+      options.verbose = true;
     }
   }
   return options;
 }
 
-main().catch(console.error);
+main().catch(err => {
+  logger.error('Unexpected error', err);
+  process.exit(1);
+});

@@ -1,6 +1,6 @@
 {
   "name": "browser-extvet",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Browser Extension Security Scanner - Vet your extensions before they vet your data",
   "main": "src/index.js",
   "bin": {

@@ -6,6 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const logger = require('../logger.js');
 
 // Firefox-specific dangerous permissions
 const DANGEROUS_PERMISSIONS = {
@@ -80,7 +81,9 @@ async function loadMaliciousDb(options = {}) {
   try {
     const { getMaliciousIds } = require('../malicious-db.js');
     KNOWN_MALICIOUS = await getMaliciousIds({ quiet: true, ...options });
+    logger.debug(`Loaded ${KNOWN_MALICIOUS.size} malicious extension IDs`);
   } catch (err) {
+    logger.warn(`Failed to load malicious DB: ${err.message}`);
     KNOWN_MALICIOUS = new Set();
   }
   
@@ -136,7 +139,7 @@ function findProfiles(basePaths) {
         }
       }
     } catch (err) {
-      // Skip inaccessible directories
+      logger.debug(`Skipping inaccessible directory: ${basePath}`, { error: err.message });
     }
   }
   
@@ -176,7 +179,7 @@ function findExtensions(profilePath) {
       }
     }
   } catch (err) {
-    // Skip inaccessible directories
+    logger.debug(`Skipping inaccessible extensions directory: ${extensionsPath}`, { error: err.message });
   }
   
   // Also check extensions.json for system/user extensions
@@ -202,7 +205,7 @@ function findExtensions(profilePath) {
         }
       }
     } catch (err) {
-      // Skip if can't parse
+      logger.debug(`Failed to parse extensions.json: ${extensionsJsonPath}`, { error: err.message });
     }
   }
   
@@ -226,9 +229,11 @@ function parseManifest(extPath, extType, options = {}) {
         // Store extracted path for later cleanup
         options._extractedPath = extractedPath;
       } else {
+        logger.debug(`Failed to extract XPI: ${extPath}`);
         return null;
       }
     } catch (err) {
+      logger.debug(`XPI extraction error: ${extPath}`, { error: err.message });
       return null;
     }
   } else {
@@ -254,11 +259,12 @@ function parseManifest(extPath, extType, options = {}) {
     }
     return manifest;
   } catch (err) {
+    logger.warn(`Failed to parse manifest at ${manifestPath}: ${err.message}`);
     if (extractedPath) {
       try {
         const { cleanupExtracted } = require('../xpi-extractor.js');
         cleanupExtracted(extractedPath);
-      } catch (e) {}
+      } catch (_e) { /* Cleanup failure is non-critical */ }
     }
     return null;
   }
@@ -466,7 +472,7 @@ function analyzeBackground(manifest, extInfo, extPath) {
       }
       
     } catch (err) {
-      // Skip unreadable files
+      logger.debug(`Failed to analyze script ${script}: ${err.message}`);
     }
   }
   
@@ -498,24 +504,29 @@ function checkKnownMalicious(extInfo, manifest) {
 async function scanFirefox(options = {}) {
   const findings = [];
   
+  logger.debug('Starting Firefox scanner', { options: { ...options, quiet: undefined } });
+  
   // Load malicious DB
   await loadMaliciousDb(options);
   
   // Get Firefox paths
   const basePaths = getFirefoxPaths();
+  logger.debug('Firefox base paths', basePaths);
+  
   if (basePaths.length === 0) {
-    console.log('  No Firefox installation found');
+    logger.info('  No Firefox installation found');
     return findings;
   }
   
   // Find all profiles
   const profiles = findProfiles(basePaths);
   if (profiles.length === 0) {
-    console.log('  No Firefox profiles found');
+    logger.info('  No Firefox profiles found');
     return findings;
   }
   
-  console.log(`  Found ${profiles.length} Firefox profiles`);
+  logger.info(`  Found ${profiles.length} Firefox profiles`);
+  logger.debug('Found profiles', profiles.map(p => p.name));
   
   let totalExtensions = 0;
   
@@ -542,9 +553,13 @@ async function scanFirefox(options = {}) {
         continue;
       }
       
-      if (!manifest) continue;
+      if (!manifest) {
+        logger.debug(`Skipping extension without manifest: ${ext.id}`);
+        continue;
+      }
       
-      console.log(`  Scanning: ${manifest.name || ext.id}`);
+      logger.info(`  Scanning: ${manifest.name || ext.id}`);
+      logger.debug('Extension details', { id: ext.id, type: ext.type, path: ext.path });
       
       // Run all analyzers
       findings.push(...checkKnownMalicious(ext, manifest));
@@ -557,12 +572,13 @@ async function scanFirefox(options = {}) {
         try {
           const { cleanupExtracted } = require('../xpi-extractor.js');
           cleanupExtracted(parseOptions._extractedPath);
-        } catch (e) {}
+        } catch (_e) { /* Cleanup failure is non-critical */ }
       }
     }
   }
   
-  console.log(`  Found ${totalExtensions} extensions`);
+  logger.info(`  Found ${totalExtensions} extensions`);
+  logger.debug(`Scan complete, ${findings.length} findings`);
   
   return findings;
 }

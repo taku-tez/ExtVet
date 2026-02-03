@@ -6,6 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const logger = require('../logger.js');
 
 // Dangerous permissions that need review
 const DANGEROUS_PERMISSIONS = {
@@ -81,7 +82,9 @@ async function loadMaliciousDb(options = {}) {
   try {
     const { getMaliciousIds } = require('../malicious-db.js');
     KNOWN_MALICIOUS = await getMaliciousIds({ quiet: true, ...options });
+    logger.debug(`Loaded ${KNOWN_MALICIOUS.size} malicious extension IDs`);
   } catch (err) {
+    logger.warn(`Failed to load malicious DB: ${err.message}`);
     KNOWN_MALICIOUS = new Set();
   }
   
@@ -166,7 +169,7 @@ function findExtensions(basePaths, options = {}) {
           }
         }
       } catch (err) {
-        // Skip inaccessible directories
+        logger.debug(`Skipping inaccessible directory: ${extensionsDir}`, { error: err.message });
       }
     }
   }
@@ -179,12 +182,16 @@ function findExtensions(basePaths, options = {}) {
  */
 function parseManifest(extPath) {
   const manifestPath = path.join(extPath, 'manifest.json');
-  if (!fs.existsSync(manifestPath)) return null;
+  if (!fs.existsSync(manifestPath)) {
+    logger.debug(`No manifest.json found at ${extPath}`);
+    return null;
+  }
   
   try {
     const content = fs.readFileSync(manifestPath, 'utf-8');
     return JSON.parse(content);
   } catch (err) {
+    logger.warn(`Failed to parse manifest at ${manifestPath}: ${err.message}`);
     return null;
   }
 }
@@ -357,7 +364,7 @@ function analyzeBackground(manifest, extInfo, extPath) {
       }
       
     } catch (err) {
-      // Skip unreadable files
+      logger.debug(`Failed to analyze script ${script}: ${err.message}`);
     }
   }
   
@@ -389,25 +396,34 @@ function checkKnownMalicious(extInfo, manifest) {
 async function scanChrome(options = {}) {
   const findings = [];
   
+  logger.debug('Starting Chrome scanner', { options: { ...options, quiet: undefined } });
+  
   // Load malicious DB
   await loadMaliciousDb(options);
   
   // Get extension paths
   const basePaths = getExtensionPaths(options);
+  logger.debug('Extension base paths', basePaths);
+  
   if (basePaths.length === 0) {
-    console.log('  No browser installation found');
+    logger.info('  No browser installation found');
     return findings;
   }
   
   // Find all extensions
   const extensions = findExtensions(basePaths, options);
-  console.log(`  Found ${extensions.length} extensions`);
+  logger.info(`  Found ${extensions.length} extensions`);
+  logger.debug('Found extensions', extensions.map(e => ({ id: e.id, profile: e.profile })));
   
   for (const ext of extensions) {
     const manifest = parseManifest(ext.path);
-    if (!manifest) continue;
+    if (!manifest) {
+      logger.debug(`Skipping extension without manifest: ${ext.id}`);
+      continue;
+    }
     
-    console.log(`  Scanning: ${manifest.name || ext.id}`);
+    logger.info(`  Scanning: ${manifest.name || ext.id}`);
+    logger.debug(`Extension details`, { id: ext.id, version: ext.version, path: ext.path });
     
     // Run all analyzers
     findings.push(...checkKnownMalicious(ext, manifest));
@@ -416,6 +432,7 @@ async function scanChrome(options = {}) {
     findings.push(...analyzeBackground(manifest, ext, ext.path));
   }
   
+  logger.debug(`Scan complete, ${findings.length} findings`);
   return findings;
 }
 
