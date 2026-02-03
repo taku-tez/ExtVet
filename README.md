@@ -86,6 +86,66 @@ extvet scan --format sarif --output results.sarif
 
 # Filter by severity
 extvet scan --severity warning
+
+# Verbose output (debug mode)
+extvet scan --verbose
+```
+
+## Configuration
+
+ExtVet supports configuration files to customize scanning behavior.
+
+### Config File Locations
+
+ExtVet searches for config in this order:
+1. `.extvetrc` (JSON)
+2. `.extvetrc.json`
+3. `extvet.config.js`
+4. `package.json` `"extvet"` field
+
+### Config Options
+
+```json
+{
+  "ignoreExtensions": [
+    "nkbihfbeogaeaoehlefnkodbefgpgknn"
+  ],
+  "severityOverrides": {
+    "ext-perm-tabs": "warning",
+    "ext-mv2-deprecated": "info"
+  },
+  "browser": "chrome",
+  "format": "table",
+  "severity": "info",
+  "quiet": false,
+  "verbose": false
+}
+```
+
+### JavaScript Config
+
+```javascript
+// extvet.config.js
+module.exports = {
+  ignoreExtensions: [
+    'nkbihfbeogaeaoehlefnkodbefgpgknn', // MetaMask - trusted
+  ],
+  severityOverrides: {
+    'ext-perm-tabs': 'warning',
+  },
+};
+```
+
+### package.json
+
+```json
+{
+  "name": "my-project",
+  "extvet": {
+    "ignoreExtensions": ["abc123..."],
+    "browser": "chrome"
+  }
+}
 ```
 
 ## Permission Risk Levels
