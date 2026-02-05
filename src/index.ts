@@ -10,8 +10,9 @@ import { Reporter } from './reporter.js';
 import { applySeverityOverrides, filterIgnoredExtensions } from './config.js';
 import * as logger from './logger.js';
 import type { ScanOptions, ScanSummary, Finding, WebStoreResult } from './types.js';
+import { VERSION } from './constants.js';
 
-export const version = '0.7.0';
+export const version = VERSION;
 
 /**
  * Scan installed browser extensions

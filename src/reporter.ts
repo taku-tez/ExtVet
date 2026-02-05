@@ -3,6 +3,7 @@
  */
 
 import type { Finding, ScanOptions, ScanSummary } from './types.js';
+import { VERSION } from './constants.js';
 
 interface SarifRule {
   id: string;
@@ -212,7 +213,7 @@ export class Reporter {
     return {
       meta: {
         tool: 'ExtVet',
-        version: '0.6.1',
+        version: VERSION,
         timestamp: new Date().toISOString(),
         browser: options.browserType || this.browser,
         profile: options.profile || this.profile,

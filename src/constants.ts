@@ -6,6 +6,11 @@
 import type { PermissionDanger, SuspiciousPattern } from './types.js';
 
 /**
+ * ExtVet version - single source of truth
+ */
+export const VERSION = '0.7.0';
+
+/**
  * Dangerous permissions that need security review
  * Used by both Chrome and Firefox scanners
  */
