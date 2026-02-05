@@ -1,6 +1,6 @@
-const { test, describe } = require('node:test');
-const assert = require('node:assert');
-const { scan, scanUrl, version } = require('../dist/index.js');
+import { test, describe } from 'node:test';
+import assert from 'node:assert';
+import { scan, scanUrl, version } from '../dist/index.js';
 
 describe('ExtVet Core', () => {
   test('version is defined and valid semver', () => {

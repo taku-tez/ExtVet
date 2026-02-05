@@ -1,6 +1,6 @@
-const { test, describe, beforeEach } = require('node:test');
-const assert = require('node:assert');
-const logger = require('../dist/logger.js');
+import { test, describe, beforeEach } from 'node:test';
+import assert from 'node:assert';
+import * as logger from '../dist/logger.js';
 
 describe('Logger', () => {
   beforeEach(() => {

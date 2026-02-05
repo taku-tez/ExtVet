@@ -1,6 +1,7 @@
 {
   "name": "browser-extvet",
   "version": "0.7.0",
+  "type": "module",
   "description": "Browser Extension Security Scanner - Vet your extensions before they vet your data",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,6 +16,8 @@
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
     "test": "npm run build && node --test test/*.test.js",
     "start": "node bin/extvet.js",
     "prepublishOnly": "npm run build && npm test",
@@ -44,9 +47,13 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "dependencies": {},
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@types/node": "^22.0.0",
-    "typescript": "^5.7.0"
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "eslint": "^9.39.2",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.54.0"
   }
 }

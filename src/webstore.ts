@@ -218,7 +218,7 @@ export async function checkWebStore(target: string, options: CheckOptions = {}):
     if (match) extensionId = match[1];
     storeType = 'chrome';
   } else if (target.includes('addons.mozilla.org')) {
-    const match = target.match(/\/addon\/([^\/]+)/);
+    const match = target.match(/\/addon\/([^/]+)/);
     if (match) extensionId = match[1];
     storeType = 'firefox';
   }

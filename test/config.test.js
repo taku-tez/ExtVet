@@ -1,12 +1,12 @@
-const { test, describe } = require('node:test');
-const assert = require('node:assert');
-const { 
+import { test, describe } from 'node:test';
+import assert from 'node:assert';
+import { 
   loadConfig, 
   mergeConfig, 
   applySeverityOverrides, 
   filterIgnoredExtensions,
   DEFAULT_CONFIG 
-} = require('../dist/config.js');
+} from '../dist/config.js';
 
 describe('Config', () => {
   test('DEFAULT_CONFIG has expected properties', () => {
