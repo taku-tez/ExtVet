@@ -1,6 +1,7 @@
 # 🦅 ExtVet
 
 [![CI](https://github.com/taku-tez/ExtVet/actions/workflows/ci.yml/badge.svg)](https://github.com/taku-tez/ExtVet/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/browser-extvet.svg)](https://www.npmjs.com/package/browser-extvet)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org/)
 
@@ -20,12 +21,12 @@ ExtVet analyzes installed browser extensions for security risks, suspicious perm
 ## Installation
 
 ```bash
-# From npm (coming soon)
-npm install -g browser-extvet
-
-# From source
+# From source (recommended)
 git clone https://github.com/taku-tez/ExtVet.git
-cd ExtVet && npm install && npm link
+cd ExtVet && npm install && npm run build && npm link
+
+# From npm (coming soon - package: browser-extvet)
+# npm install -g browser-extvet
 ```
 
 ## Usage
