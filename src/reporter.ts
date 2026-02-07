@@ -115,11 +115,18 @@ export class Reporter {
   }
 
   async report(findings: Finding[], options: ScanOptions = {}): Promise<ScanSummary> {
+    const { calculateRiskScores, calculateOverallScore } = await import('./risk-scorer.js');
+    const riskScores = calculateRiskScores(findings);
+    const overall = calculateOverallScore(riskScores);
+
     const summary: ScanSummary = {
       critical: findings.filter(f => f.severity === 'critical').length,
       warning: findings.filter(f => f.severity === 'warning').length,
       info: findings.filter(f => f.severity === 'info').length,
       total: findings.length,
+      riskScores,
+      overallRiskScore: overall.score,
+      overallGrade: overall.grade,
     };
 
     if (this.format === 'json') {
@@ -327,6 +334,17 @@ export class Reporter {
     console.log(`🟡 Warning:  ${summary.warning}`);
     console.log(`🔵 Info:     ${summary.info}`);
     console.log(`📊 Total:    ${summary.total}`);
+
+    if (summary.riskScores && summary.riskScores.length > 0) {
+      console.log('\n' + '─'.repeat(80));
+      console.log('RISK SCORES');
+      console.log('─'.repeat(80));
+      for (const rs of summary.riskScores) {
+        const gradeEmoji = rs.grade === 'A' ? '🟢' : rs.grade === 'B' ? '🟢' : rs.grade === 'C' ? '🟡' : rs.grade === 'D' ? '🟠' : '🔴';
+        console.log(`${gradeEmoji} ${rs.grade} (${rs.score}/100) — ${rs.extension}`);
+      }
+      console.log(`\n🏆 Overall: Grade ${summary.overallGrade} (${summary.overallRiskScore}/100)`);
+    }
     console.log('─'.repeat(80) + '\n');
   }
 

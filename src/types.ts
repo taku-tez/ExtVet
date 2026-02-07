@@ -26,12 +26,24 @@ export interface ScanOptions {
   configPath?: string;
 }
 
+export interface ExtensionRiskScore {
+  extension: string;
+  score: number;       // 0-100
+  grade: 'A' | 'B' | 'C' | 'D' | 'F';
+  criticalCount: number;
+  warningCount: number;
+  infoCount: number;
+}
+
 export interface ScanSummary {
   critical: number;
   warning: number;
   info: number;
   total: number;
   findings?: Finding[];
+  riskScores?: ExtensionRiskScore[];
+  overallRiskScore?: number;
+  overallGrade?: string;
 }
 
 export interface ExtensionInfo {

@@ -91,4 +91,5 @@ export async function scanUrl(target: string, options: ScanOptions = {}): Promis
 }
 
 // Re-export types
-export type { ScanOptions, ScanSummary, Finding } from './types.js';
+export type { ScanOptions, ScanSummary, Finding, ExtensionRiskScore } from './types.js';
+export { calculateRiskScores, calculateOverallScore } from './risk-scorer.js';

@@ -574,3 +574,62 @@ describe('Enhanced Permission Combos', () => {
     assert.ok(findings.some(f => f.message.includes('spyware')));
   });
 });
+
+// =============================================
+// Risk Scorer
+// =============================================
+
+const { calculateRiskScores, calculateOverallScore } = await import('../dist/risk-scorer.js');
+
+describe('Risk Scorer', () => {
+  test('calculates score from findings', () => {
+    const findings = [
+      { id: 'a', severity: 'critical', extension: 'Ext A (id1)', message: 'x' },
+      { id: 'b', severity: 'warning', extension: 'Ext A (id1)', message: 'y' },
+      { id: 'c', severity: 'info', extension: 'Ext B (id2)', message: 'z' },
+    ];
+    const scores = calculateRiskScores(findings);
+    assert.strictEqual(scores.length, 2);
+    // Ext A: 25 + 8 = 33 → grade C
+    const extA = scores.find(s => s.extension.includes('Ext A'));
+    assert.strictEqual(extA.score, 33);
+    assert.strictEqual(extA.grade, 'C');
+    // Ext B: 2 → grade A
+    const extB = scores.find(s => s.extension.includes('Ext B'));
+    assert.strictEqual(extB.score, 2);
+    assert.strictEqual(extB.grade, 'A');
+  });
+
+  test('caps at 100', () => {
+    const findings = Array(10).fill(null).map((_, i) => ({
+      id: `f${i}`, severity: 'critical', extension: 'Bad (id)', message: 'bad',
+    }));
+    const scores = calculateRiskScores(findings);
+    assert.strictEqual(scores[0].score, 100);
+    assert.strictEqual(scores[0].grade, 'F');
+  });
+
+  test('overall score uses max', () => {
+    const scores = [
+      { extension: 'A', score: 10, grade: 'A', criticalCount: 0, warningCount: 1, infoCount: 1 },
+      { extension: 'B', score: 80, grade: 'F', criticalCount: 3, warningCount: 0, infoCount: 0 },
+    ];
+    const overall = calculateOverallScore(scores);
+    assert.strictEqual(overall.score, 80);
+    assert.strictEqual(overall.grade, 'F');
+  });
+
+  test('empty findings return grade A', () => {
+    const overall = calculateOverallScore([]);
+    assert.strictEqual(overall.score, 0);
+    assert.strictEqual(overall.grade, 'A');
+  });
+
+  test('scan summary includes risk scores', async () => {
+    const { scan } = await import('../dist/index.js');
+    const result = await scan('chrome', { quiet: true });
+    assert.ok('riskScores' in result);
+    assert.ok('overallRiskScore' in result);
+    assert.ok('overallGrade' in result);
+  });
+});
