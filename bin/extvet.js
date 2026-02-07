@@ -35,7 +35,7 @@ Browsers:
 
 Options:
   --profile <path>    Browser profile path
-  --format <type>     Output format (table, json, sarif, html)
+  --format <type>     Output format (table, json, sarif, html, markdown)
   --output <file>     Output file path
   --quiet             Suppress non-essential output
   --verbose           Enable debug output

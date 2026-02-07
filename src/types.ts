@@ -13,7 +13,7 @@ export interface Finding {
 export interface ScanOptions {
   quiet?: boolean;
   verbose?: boolean;
-  format?: 'table' | 'json' | 'sarif' | 'html';
+  format?: 'table' | 'json' | 'sarif' | 'html' | 'markdown';
   output?: string;
   severity?: 'info' | 'warning' | 'critical';
   profile?: string;

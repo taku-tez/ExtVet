@@ -243,3 +243,23 @@ describe('Reporter', () => {
       console.log = originalLog;
     }
   });
+
+  test('report with markdown format outputs markdown', async () => {
+    let output = '';
+    const originalLog = console.log;
+    console.log = (msg) => { output += msg; };
+    
+    try {
+      const reporter = new Reporter({ format: 'markdown' });
+      await reporter.report([
+        { id: 'test-1', severity: 'critical', extension: 'Bad Ext', message: 'Critical issue', recommendation: 'Fix it' },
+      ]);
+      
+      assert.ok(output.includes('# 🦅 ExtVet Security Report'));
+      assert.ok(output.includes('Critical issue'));
+      assert.ok(output.includes('Bad Ext'));
+      assert.ok(output.includes('💡 Fix it'));
+    } finally {
+      console.log = originalLog;
+    }
+  });
