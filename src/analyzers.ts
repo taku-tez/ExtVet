@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as logger from './logger.js';
-import { DANGEROUS_PERMISSIONS, SUSPICIOUS_PATTERNS, LEGITIMATE_URLS } from './constants.js';
+import { DANGEROUS_PERMISSIONS, DANGEROUS_COMBOS, SUSPICIOUS_PATTERNS, LEGITIMATE_URLS } from './constants.js';
 import type { Finding, Manifest, ExtensionInfo, PermissionDanger, SuspiciousPattern } from './types.js';
 
 /**
@@ -206,6 +206,38 @@ export function analyzeBackgroundScripts(
     }
   }
   
+  return findings;
+}
+
+/**
+ * Analyze dangerous permission combinations
+ */
+export function analyzePermissionCombos(
+  manifest: Manifest,
+  extInfo: ExtensionInfo,
+  prefix: string = 'ext'
+): Finding[] {
+  const findings: Finding[] = [];
+  const extName = manifest.name || extInfo.id;
+
+  const allPermissions = new Set([
+    ...(manifest.permissions || []),
+    ...(manifest.optional_permissions || []),
+    ...(manifest.host_permissions || []),
+  ]);
+
+  for (const combo of DANGEROUS_COMBOS) {
+    if (combo.permissions.every(p => allPermissions.has(p))) {
+      findings.push({
+        id: `${prefix}-combo-${combo.permissions.join('-').replace(/[^a-z]/gi, '-').toLowerCase()}`,
+        severity: combo.severity,
+        extension: `${extName} (${extInfo.id})`,
+        message: `Permission combo: ${combo.msg}`,
+        recommendation: combo.recommendation,
+      });
+    }
+  }
+
   return findings;
 }
 

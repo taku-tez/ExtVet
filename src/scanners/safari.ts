@@ -18,6 +18,7 @@ import {
   analyzeContentScripts,
   analyzeBackgroundScripts,
   checkManifestVersion,
+  analyzePermissionCombos,
   analyzeCSP,
   analyzeUpdateUrl,
   analyzeExternallyConnectable,
@@ -360,6 +361,7 @@ export async function scanSafari(options: ScanOptions = {}): Promise<Finding[]> 
     findings.push(...analyzeContentScripts(manifest, ext, 'safari'));
     findings.push(...analyzeSafariSpecific(manifest, ext));
     findings.push(...checkManifestVersion(manifest, ext, 'safari'));
+    findings.push(...analyzePermissionCombos(manifest, ext, 'safari'));
     findings.push(...analyzeCSP(manifest, ext, 'safari'));
     findings.push(...analyzeUpdateUrl(manifest, ext, 'safari'));
     findings.push(...analyzeExternallyConnectable(manifest, ext, 'safari'));

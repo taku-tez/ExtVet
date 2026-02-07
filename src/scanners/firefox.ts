@@ -12,6 +12,7 @@ import {
   analyzePermissions,
   analyzeContentScripts,
   analyzeBackgroundScripts,
+  analyzePermissionCombos,
   analyzeCSP,
   analyzeUpdateUrl,
   analyzeExternallyConnectable,
@@ -311,6 +312,7 @@ export async function scanFirefox(options: ScanOptions = {}): Promise<Finding[]>
       findings.push(...analyzePermissions(manifest, ext, 'ff', FIREFOX_PERMISSIONS));
       findings.push(...analyzeContentScripts(manifest, ext, 'ff'));
       findings.push(...analyzeFirefoxSpecific(manifest, ext));
+    findings.push(...analyzePermissionCombos(manifest, ext, 'ff'));
       findings.push(...analyzeCSP(manifest, ext, 'ff'));
       findings.push(...analyzeUpdateUrl(manifest, ext, 'ff'));
       findings.push(...analyzeExternallyConnectable(manifest, ext, 'ff'));

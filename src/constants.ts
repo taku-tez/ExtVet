@@ -8,7 +8,7 @@ import type { PermissionDanger, SuspiciousPattern } from './types.js';
 /**
  * ExtVet version - single source of truth
  */
-export const VERSION = '0.8.0';
+export const VERSION = '0.9.0';
 
 /**
  * Dangerous permissions that need security review
@@ -109,6 +109,80 @@ export const SUSPICIOUS_PATTERNS: SuspiciousPattern[] = [
 export const FIREFOX_PATTERNS: SuspiciousPattern[] = [
   { pattern: /browser\.downloads\.download/g, severity: 'info', msg: 'Can initiate downloads' },
   { pattern: /browser\.webRequest\.filterResponseData/g, severity: 'warning', msg: 'Filters response data' },
+];
+
+/**
+ * Dangerous permission combinations
+ * Permissions that are significantly more dangerous when combined
+ */
+export interface PermissionCombo {
+  permissions: string[];
+  severity: 'critical' | 'warning';
+  msg: string;
+  recommendation: string;
+}
+
+export const DANGEROUS_COMBOS: PermissionCombo[] = [
+  {
+    permissions: ['webRequest', 'webRequestBlocking', '<all_urls>'],
+    severity: 'critical',
+    msg: 'Can intercept and modify ALL network traffic (full MitM capability)',
+    recommendation: 'This combination allows complete network traffic manipulation; verify the extension truly needs this',
+  },
+  {
+    permissions: ['cookies', '<all_urls>'],
+    severity: 'critical',
+    msg: 'Can read cookies from ALL websites (mass session hijacking risk)',
+    recommendation: 'Limit host permissions to specific domains the extension actually needs',
+  },
+  {
+    permissions: ['cookies', '*://*/*'],
+    severity: 'critical',
+    msg: 'Can read cookies from ALL websites (mass session hijacking risk)',
+    recommendation: 'Limit host permissions to specific domains the extension actually needs',
+  },
+  {
+    permissions: ['tabs', 'history'],
+    severity: 'warning',
+    msg: 'Can build a complete browsing profile (all tabs + full history)',
+    recommendation: 'Review if both tab access and history reading are necessary',
+  },
+  {
+    permissions: ['nativeMessaging', '<all_urls>'],
+    severity: 'critical',
+    msg: 'Can communicate with native apps while accessing all websites (data exfiltration via native bridge)',
+    recommendation: 'Native messaging + all URLs enables silent data exfiltration to local programs',
+  },
+  {
+    permissions: ['debugger', '<all_urls>'],
+    severity: 'critical',
+    msg: 'Full debugging access to all tabs (can inject code, read memory, bypass CSP)',
+    recommendation: 'Debugger + all URLs is equivalent to full browser compromise',
+  },
+  {
+    permissions: ['proxy', 'webRequest'],
+    severity: 'critical',
+    msg: 'Can route traffic through attacker proxy and intercept requests',
+    recommendation: 'This combination enables transparent traffic interception',
+  },
+  {
+    permissions: ['management', 'downloads'],
+    severity: 'warning',
+    msg: 'Can disable other extensions and trigger downloads (dropper pattern)',
+    recommendation: 'Extension management + download capability is a common malware dropper pattern',
+  },
+  {
+    permissions: ['clipboardRead', '<all_urls>'],
+    severity: 'warning',
+    msg: 'Can read clipboard data and send it to any website (password/credential theft)',
+    recommendation: 'Clipboard reading with broad host access enables credential harvesting',
+  },
+  {
+    permissions: ['geolocation', '<all_urls>'],
+    severity: 'warning',
+    msg: 'Can track physical location and send it to any website',
+    recommendation: 'Verify location access is necessary for the extension functionality',
+  },
 ];
 
 /**

@@ -348,3 +348,55 @@ describe('analyzeWebAccessibleResources', () => {
     assert.strictEqual(findings.length, 0);
   });
 });
+
+// Permission combo tests
+import { analyzePermissionCombos } from '../dist/analyzers.js';
+
+describe('analyzePermissionCombos', () => {
+  test('detects webRequest + webRequestBlocking + all_urls combo', () => {
+    const manifest = { permissions: ['webRequest', 'webRequestBlocking', '<all_urls>'] };
+    const findings = analyzePermissionCombos(manifest, ext);
+    assert.ok(findings.some(f => f.severity === 'critical' && f.message.includes('MitM')));
+  });
+
+  test('detects cookies + all_urls combo', () => {
+    const manifest = { permissions: ['cookies'], host_permissions: ['<all_urls>'] };
+    const findings = analyzePermissionCombos(manifest, ext);
+    assert.ok(findings.some(f => f.severity === 'critical' && f.message.includes('session hijacking')));
+  });
+
+  test('detects debugger + all_urls combo', () => {
+    const manifest = { permissions: ['debugger', '<all_urls>'] };
+    const findings = analyzePermissionCombos(manifest, ext);
+    assert.ok(findings.some(f => f.message.includes('debugging')));
+  });
+
+  test('detects proxy + webRequest combo', () => {
+    const manifest = { permissions: ['proxy', 'webRequest'] };
+    const findings = analyzePermissionCombos(manifest, ext);
+    assert.ok(findings.some(f => f.message.includes('proxy')));
+  });
+
+  test('no combo match for safe permissions', () => {
+    const manifest = { permissions: ['storage', 'notifications'] };
+    const findings = analyzePermissionCombos(manifest, ext);
+    assert.strictEqual(findings.length, 0);
+  });
+
+  test('empty permissions produce no findings', () => {
+    const findings = analyzePermissionCombos({}, ext);
+    assert.strictEqual(findings.length, 0);
+  });
+
+  test('detects combo across permissions and host_permissions', () => {
+    const manifest = { permissions: ['cookies'], host_permissions: ['*://*/*'] };
+    const findings = analyzePermissionCombos(manifest, ext);
+    assert.ok(findings.some(f => f.severity === 'critical'));
+  });
+
+  test('detects management + downloads dropper pattern', () => {
+    const manifest = { permissions: ['management', 'downloads'] };
+    const findings = analyzePermissionCombos(manifest, ext);
+    assert.ok(findings.some(f => f.message.includes('dropper')));
+  });
+});

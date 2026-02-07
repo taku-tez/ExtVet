@@ -12,6 +12,7 @@ import {
   analyzePermissions,
   analyzeScriptContent,
   checkManifestVersion,
+  analyzePermissionCombos,
   analyzeCSP,
   analyzeUpdateUrl,
   analyzeExternallyConnectable,
@@ -71,6 +72,7 @@ export async function scanFile(filePath: string, options: ScanOptions = {}): Pro
     // Run analyzers
     findings.push(...analyzePermissions(manifest, extInfo, 'file'));
     findings.push(...checkManifestVersion(manifest, extInfo, 'file'));
+    findings.push(...analyzePermissionCombos(manifest, extInfo, 'file'));
     findings.push(...analyzeCSP(manifest, extInfo, 'file'));
     findings.push(...analyzeUpdateUrl(manifest, extInfo, 'file'));
     findings.push(...analyzeExternallyConnectable(manifest, extInfo, 'file'));
