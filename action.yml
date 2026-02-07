@@ -1,0 +1,82 @@
+name: 'ExtVet - Browser Extension Security Scanner'
+description: 'Scan browser extensions for security issues, malicious IDs, and dangerous permissions'
+author: 'taku-tez'
+
+inputs:
+  command:
+    description: 'Command to run (scan, check, file, update)'
+    required: false
+    default: 'scan'
+  browser:
+    description: 'Browser to scan (chrome, firefox, brave, edge, safari)'
+    required: false
+    default: 'chrome'
+  target:
+    description: 'Extension ID/URL for check command, or file path for file command'
+    required: false
+  format:
+    description: 'Output format (table, json, sarif, html)'
+    required: false
+    default: 'table'
+  fail-on:
+    description: 'Fail on severity level (critical, warning, info, none)'
+    required: false
+    default: 'critical'
+  output:
+    description: 'Output file path'
+    required: false
+  severity:
+    description: 'Minimum severity to report (info, warning, critical)'
+    required: false
+    default: 'info'
+
+outputs:
+  critical:
+    description: 'Number of critical findings'
+  warning:
+    description: 'Number of warning findings'
+  info:
+    description: 'Number of info findings'
+  total:
+    description: 'Total number of findings'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install ExtVet
+      shell: bash
+      run: npm install -g browser-extvet
+
+    - name: Update malicious DB
+      shell: bash
+      run: extvet update --quiet
+
+    - name: Run ExtVet
+      id: extvet
+      shell: bash
+      run: |
+        CMD="extvet ${{ inputs.command }}"
+
+        if [ "${{ inputs.command }}" = "scan" ]; then
+          CMD="$CMD ${{ inputs.browser }}"
+        elif [ "${{ inputs.command }}" = "check" ] || [ "${{ inputs.command }}" = "file" ]; then
+          CMD="$CMD ${{ inputs.target }}"
+        fi
+
+        CMD="$CMD --format ${{ inputs.format }} --severity ${{ inputs.severity }} --fail-on ${{ inputs.fail-on }}"
+
+        if [ -n "${{ inputs.output }}" ]; then
+          CMD="$CMD --output ${{ inputs.output }}"
+        fi
+
+        echo "Running: $CMD"
+        $CMD
+
+branding:
+  icon: 'shield'
+  color: 'blue'

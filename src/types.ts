@@ -22,6 +22,7 @@ export interface ScanOptions {
   severityOverrides?: Record<string, Finding['severity']>;
   customRules?: CustomRule[];
   browser?: string;
+  failOn?: 'critical' | 'warning' | 'info' | 'none';
   configPath?: string;
 }
 

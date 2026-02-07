@@ -40,6 +40,7 @@ Options:
   --quiet             Suppress non-essential output
   --verbose           Enable debug output
   --severity <level>  Minimum severity to report (info, warning, critical)
+  --fail-on <level>   Exit with code 1 on severity (critical, warning, info, none)
   --config <file>     Config file path (default: .extvetrc)
 
 Config file (.extvetrc):
@@ -119,7 +120,7 @@ async function main() {
     
     try {
       const results = await scan(browser, options);
-      process.exit(results.critical > 0 ? 1 : 0);
+      process.exit(getExitCode(results, options));
     } catch (error) {
       logger.error(`Scan failed: ${error.message}`, error);
       process.exit(1);
@@ -141,7 +142,7 @@ async function main() {
     
     try {
       const results = await scanUrl(target, options);
-      process.exit(results.critical > 0 ? 1 : 0);
+      process.exit(getExitCode(results, options));
     } catch (error) {
       logger.error(`Check failed: ${error.message}`, error);
       process.exit(1);
@@ -164,7 +165,7 @@ async function main() {
     try {
       const { scanFile } = await import('../dist/file-scanner.js');
       const results = await scanFile(filePath, options);
-      process.exit(results.critical > 0 ? 1 : 0);
+      process.exit(getExitCode(results, options));
     } catch (error) {
       logger.error(`File scan failed: ${error.message}`, error);
       process.exit(1);
@@ -174,6 +175,15 @@ async function main() {
   console.error(`Unknown command: ${command}`);
   showHelp();
   process.exit(1);
+}
+
+function getExitCode(results, options) {
+  const failOn = options.failOn || 'critical';
+  if (failOn === 'critical') return results.critical > 0 ? 1 : 0;
+  if (failOn === 'warning') return (results.critical + results.warning) > 0 ? 1 : 0;
+  if (failOn === 'info') return results.total > 0 ? 1 : 0;
+  if (failOn === 'none') return 0;
+  return results.critical > 0 ? 1 : 0;
 }
 
 function parseOptions(args) {
@@ -193,6 +203,8 @@ function parseOptions(args) {
       options.quiet = true;
     } else if (args[i] === '--verbose' || args[i] === '-v') {
       options.verbose = true;
+    } else if (args[i] === '--fail-on' && args[i + 1]) {
+      options.failOn = args[++i];
     }
   }
   return options;
