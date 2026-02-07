@@ -22,6 +22,7 @@ Commands:
   scan [browser]      Scan installed browser extensions
   check <url|id>      Check a specific extension from web store
   file <path>         Scan a local extension file (.crx, .xpi, .zip)
+  watch [browser]     Continuous monitoring (re-scans periodically)
   update              Update malicious extension database
   db-stats            Show database statistics
   version             Show version
@@ -172,6 +173,70 @@ async function main() {
     }
   }
 
+  if (command === 'watch') {
+    const browser = args[1] && !args[1].startsWith('-') ? args[1] : (fileConfig.browser || 'chrome');
+    const cliOptions = parseOptions(args.slice(args[1]?.startsWith('-') ? 1 : 2));
+    const options = mergeConfig(fileConfig, { ...cliOptions, quiet: false });
+    const intervalMin = parseInt(cliOptions.watchInterval) || 30;
+
+    logger.configure(options);
+    console.log(`🦅 ExtVet Watch Mode — scanning ${browser} every ${intervalMin}min\n`);
+    console.log('Press Ctrl+C to stop.\n');
+
+    let previousScores = new Map();
+
+    const runWatchScan = async () => {
+      const timestamp = new Date().toLocaleString();
+      console.log(`\n⏰ [${timestamp}] Scanning...`);
+      try {
+        const results = await scan(browser, { ...options, quiet: true });
+        const scores = results.riskScores || [];
+        const currentScores = new Map(scores.map(s => [s.extension, s]));
+
+        // Detect changes
+        const newExts = scores.filter(s => !previousScores.has(s.extension));
+        const removedExts = [...previousScores.keys()].filter(e => !currentScores.has(e));
+        const changedExts = scores.filter(s => {
+          const prev = previousScores.get(s.extension);
+          return prev && prev.score !== s.score;
+        });
+
+        if (newExts.length === 0 && removedExts.length === 0 && changedExts.length === 0) {
+          console.log(`   ✅ No changes. ${scores.length} extensions, Grade ${results.overallGrade} (${results.overallRiskScore}/100)`);
+        } else {
+          if (newExts.length > 0) {
+            console.log(`   🆕 New extensions detected:`);
+            for (const e of newExts) {
+              const emoji = e.grade === 'F' ? '🔴' : e.grade === 'D' ? '🟠' : e.grade === 'C' ? '🟡' : '🟢';
+              console.log(`      ${emoji} ${e.grade} (${e.score}) — ${e.extension}`);
+            }
+          }
+          if (removedExts.length > 0) {
+            console.log(`   🗑️  Removed: ${removedExts.join(', ')}`);
+          }
+          if (changedExts.length > 0) {
+            console.log(`   🔄 Risk score changes:`);
+            for (const e of changedExts) {
+              const prev = previousScores.get(e.extension);
+              const dir = e.score > prev.score ? '📈' : '📉';
+              console.log(`      ${dir} ${e.extension}: ${prev.grade}(${prev.score}) → ${e.grade}(${e.score})`);
+            }
+          }
+          console.log(`   📊 Overall: Grade ${results.overallGrade} (${results.overallRiskScore}/100)`);
+        }
+
+        previousScores = currentScores;
+      } catch (error) {
+        console.error(`   ❌ Scan error: ${error.message}`);
+      }
+    };
+
+    await runWatchScan();
+    setInterval(runWatchScan, intervalMin * 60 * 1000);
+    // Keep process alive
+    await new Promise(() => {});
+  }
+
   console.error(`Unknown command: ${command}`);
   showHelp();
   process.exit(1);
@@ -205,6 +270,8 @@ function parseOptions(args) {
       options.verbose = true;
     } else if (args[i] === '--fail-on' && args[i + 1]) {
       options.failOn = args[++i];
+    } else if (args[i] === '--watch-interval' && args[i + 1]) {
+      options.watchInterval = args[++i];
     }
   }
   return options;
