@@ -1,88 +1,44 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [0.7.0] - 2026-02-05
-
+## [1.3.0] - 2026-02-07
 ### Added
-- ESLint with TypeScript support and flat config
-- Comprehensive test suite (58 tests)
-  - Analyzer tests (permissions, content scripts, code patterns)
-  - Reporter tests (JSON, SARIF, risk scoring)
-- LICENSE file (MIT)
-- CHANGELOG.md
+- GitHub Actions reusable action (`action.yml`)
+- `--fail-on` flag for CI/CD exit code control (critical/warning/info/none)
 
-### Changed
-- Converted entire project to ES modules (`"type": "module"`)
-- Centralized VERSION constant in `constants.ts`
-- Test files converted from CommonJS to ES modules
-
-### Fixed
-- Regenerated `package-lock.json` to fix version inconsistencies
-- Fixed useless escape character in regex
-- Removed duplicate `dist/` entry in `.gitignore`
-
-## [0.6.1] - 2026-02-03
-
+## [1.2.0] - 2026-02-07
 ### Added
-- CONTRIBUTING.md with development guidelines
-- ARCHITECTURE.md with codebase overview
+- HTML report output (`--format html`) with dark theme dashboard
+- `--output` file saving for HTML reports
 
-### Changed
-- Extracted shared constants to `constants.ts`
-- Extracted shared analyzers to `analyzers.ts`
-
-## [0.6.0] - 2026-02-03
-
+## [1.1.0] - 2026-02-07
 ### Added
-- Full TypeScript conversion (strict mode)
-- Verbose mode (`--verbose` flag)
-- Config file support (`.extvetrc`, `.extvetrc.json`, etc.)
-- Improved error handling with debug logging
-- CSP stripping attack detection patterns
+- Malicious DB cross-check during web store verification
+- Stale/abandoned extension detection (>1yr warning, >2yr critical)
+- Chrome Web Store version and lastUpdated parsing
 
-### Changed
-- Better JSON output format with risk scoring
-- Improved malicious extension database (164+ IDs)
-
-## [0.5.0] - 2026-02-02
-
+## [1.0.0] - 2026-02-07
 ### Added
-- Safari extension scanner (macOS only)
-- Shared malicious DB loading across scanners
+- Third malicious DB source: toborrm9/malicious_extension_sentry (437 IDs)
+- CSV parser for comma-separated ID lists
+- `db-stats` CLI command
+- Total: 562+ malicious extension IDs from 3 sources
 
-## [0.4.0] - 2026-02-01
-
+## [0.9.0] - 2026-02-07
 ### Added
-- `file` command for local extension scanning
-- XPI extraction support for Firefox add-ons
-- CRX extraction support (CRX2/CRX3 formats)
+- Dangerous permission combination analysis (10 patterns)
+- MitM, session hijacking, dropper, data exfiltration combos
+- Cross-check across permissions, optional_permissions, host_permissions
 
-## [0.3.0] - 2026-01-31
-
+## [0.8.0] - 2026-02-07
 ### Added
-- GitHub Actions CI/CD workflows
-- Firefox Add-ons scanner
-- Web Store verification (Chrome Web Store, Firefox Add-ons)
-- Malicious extension database with remote updates
-- `update` command for database refresh
+- Content Security Policy (CSP) analysis
+- Update URL analysis (external server, insecure HTTP)
+- Externally connectable analysis
+- Web accessible resources analysis
 
-## [0.2.0] - 2026-01-30
-
+## [0.7.0] - 2026-02-03
 ### Added
-- Chrome extension scanner
-- Brave browser support
-- Edge browser support
-- Permission analysis
-- Content script analysis
-- Suspicious code pattern detection
-
-## [0.1.0] - 2026-01-29
-
-### Added
-- Initial release
-- Basic CLI structure
-- Table, JSON, and SARIF output formats
+- Safari extension scanner
+- Improved JSON output with risk scores
+- ESLint with TypeScript support
+- CONTRIBUTING.md and ARCHITECTURE.md

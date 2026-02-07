@@ -5,66 +5,48 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org/)
 
-**Browser Extension Security Scanner** - Vet your extensions before they vet your data.
+**Browser Extension Security Scanner** — Vet your extensions before they vet your data.
 
-ExtVet analyzes installed browser extensions for security risks, suspicious permissions, and potential malicious behavior.
+ExtVet analyzes installed browser extensions for security risks, dangerous permissions, malicious behavior, and supply chain threats.
 
-## Features
+## ✨ Features
 
-- 🔍 **Permission Analysis** - Detect dangerous permissions like `<all_urls>`, `webRequestBlocking`, `nativeMessaging`
-- 📜 **Manifest Inspection** - Check for deprecated Manifest V2, overly broad content scripts
-- 🕵️ **Code Analysis** - Find suspicious patterns like `eval()`, external connections
-- 🚨 **Known Malicious Detection** - Check against 164+ known malicious extension IDs (auto-updated)
-- 🌐 **Multi-Browser Support** - Chrome, Firefox, Brave, Edge, Safari
-- 🔎 **Web Store Verification** - Check extensions against Chrome Web Store & Firefox Add-ons
+- 🔍 **Permission Analysis** — Detect dangerous permissions (`<all_urls>`, `webRequestBlocking`, `nativeMessaging`, etc.)
+- ⚡ **Permission Combo Detection** — Flag deadly combinations (e.g., `cookies + <all_urls>` = mass session hijacking)
+- 🔒 **CSP Analysis** — Detect `unsafe-eval`, `unsafe-inline`, wildcard sources, and missing Content Security Policy
+- 🌐 **Externally Connectable** — Warn when any website can message your extension
+- 📦 **Web Accessible Resources** — Detect fingerprinting and data leak risks
+- 🔄 **Update URL Analysis** — Flag extensions self-updating from external (non-store) servers
+- 🚨 **Known Malicious Detection** — Check against **562+ known malicious extension IDs** from 3 threat databases (auto-updated)
+- 🕵️ **Code Analysis** — Find `eval()`, CSP stripping, C2 patterns, cookie exfiltration, and 25+ suspicious patterns
+- 📜 **Manifest Inspection** — Manifest V2 deprecation, broad content scripts, MAIN world access
+- 🌐 **Multi-Browser** — Chrome, Firefox, Brave, Edge, Safari
+- 🔎 **Web Store Verification** — Chrome Web Store & Firefox Add-ons metadata + stale extension detection
+- 📊 **4 Output Formats** — Table, JSON (with risk scores), SARIF, HTML dashboard
+- 🚀 **CI/CD Ready** — GitHub Action, `--fail-on` flag, exit codes
 
-## Installation
+## 📦 Installation
 
 ```bash
-# From source (recommended)
+# From npm
+npm install -g browser-extvet
+
+# From source
 git clone https://github.com/taku-tez/ExtVet.git
 cd ExtVet && npm install && npm run build && npm link
-
-# From npm (coming soon - package: browser-extvet)
-# npm install -g browser-extvet
 ```
 
-## Usage
+## 🚀 Usage
 
-### Scan All Installed Extensions
-
-```bash
-# Scan Chrome extensions
-extvet scan
-
-# Scan specific browser
-extvet scan firefox
-extvet scan brave
-extvet scan edge
-extvet scan safari  # macOS only
-
-# Scan specific profile
-extvet scan chrome --profile "Profile 1"
-```
-
-### Update Malicious Database
+### Scan Installed Extensions
 
 ```bash
-# Update known malicious extension database from remote sources
-extvet update
-```
-
-### Scan Local Extension Files
-
-```bash
-# Scan a downloaded .crx file
-extvet file extension.crx
-
-# Scan a Firefox .xpi file
-extvet file addon.xpi
-
-# Scan a zipped extension
-extvet file extension.zip
+extvet scan                          # Scan Chrome (default)
+extvet scan firefox                  # Scan Firefox
+extvet scan brave                    # Scan Brave
+extvet scan edge                     # Scan Edge
+extvet scan safari                   # Scan Safari (macOS)
+extvet scan --profile "Profile 1"    # Specific profile
 ```
 
 ### Check a Specific Extension
@@ -75,164 +57,158 @@ extvet check nkbihfbeogaeaoehlefnkodbefgpgknn
 
 # By Chrome Web Store URL
 extvet check https://chrome.google.com/webstore/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn
+
+# By Firefox Add-ons slug
+extvet check ublock-origin
+```
+
+### Scan Local Extension Files
+
+```bash
+extvet file extension.crx
+extvet file addon.xpi
+extvet file extension.zip
+```
+
+### Malicious Extension Database
+
+```bash
+extvet update       # Update DB from remote sources
+extvet db-stats     # Show database statistics
 ```
 
 ### Output Formats
 
 ```bash
-# JSON output
-extvet scan --format json
-
-# SARIF (for CI/CD integration)
-extvet scan --format sarif --output results.sarif
-
-# Filter by severity
-extvet scan --severity warning
-
-# Verbose output (debug mode)
-extvet scan --verbose
+extvet scan --format table           # Default: colored terminal output
+extvet scan --format json            # JSON with risk scores per extension
+extvet scan --format sarif           # SARIF for code scanning tools
+extvet scan --format html -o report.html  # Dark theme HTML dashboard
 ```
 
-## Configuration
+### CI/CD Options
 
-ExtVet supports configuration files to customize scanning behavior.
+```bash
+extvet scan --fail-on critical       # Exit 1 on critical findings (default)
+extvet scan --fail-on warning        # Exit 1 on warning or critical
+extvet scan --fail-on info           # Exit 1 on any finding
+extvet scan --fail-on none           # Always exit 0 (report only)
+extvet scan --severity warning       # Only show warning+ in output
+```
 
-### Config File Locations
+## 🔍 What ExtVet Detects
 
-ExtVet searches for config in this order:
-1. `.extvetrc` (JSON)
-2. `.extvetrc.json`
-3. `extvet.config.js`
-4. `package.json` `"extvet"` field
+### Permission Risks
 
-### Config Options
+| Severity | Examples |
+|----------|---------|
+| 🔴 Critical | `<all_urls>`, `debugger`, `nativeMessaging`, `proxy`, `webRequestBlocking` |
+| 🟡 Warning | `cookies`, `history`, `webRequest`, `management`, `clipboardRead`, `privacy` |
+| 🔵 Info | `tabs`, `storage`, `notifications`, `bookmarks`, `downloads` |
+
+### Dangerous Permission Combos
+
+| Combo | Risk |
+|-------|------|
+| `webRequest + webRequestBlocking + <all_urls>` | 🔴 Full MitM capability |
+| `cookies + <all_urls>` | 🔴 Mass session hijacking |
+| `debugger + <all_urls>` | 🔴 Full browser compromise |
+| `proxy + webRequest` | 🔴 Transparent traffic interception |
+| `nativeMessaging + <all_urls>` | 🔴 Data exfiltration via native bridge |
+| `management + downloads` | 🟡 Malware dropper pattern |
+| `tabs + history` | 🟡 Complete browsing profile |
+
+### Code Patterns (25+)
+
+- `eval()` / `new Function()` — Code injection
+- CSP stripping attacks (GitLab Feb 2025 campaign)
+- Cookie exfiltration patterns
+- C2 heartbeat/config patterns
+- Remote script loading
+- `document.write` / `innerHTML` XSS vectors
+
+### Manifest & CSP
+
+- Manifest V2 deprecation warnings
+- Missing or weak Content Security Policy
+- `unsafe-eval` / `unsafe-inline` in CSP
+- Wildcard script sources
+- Broad content script injection
+- External update URLs (non-store)
+- Overly permissive `externally_connectable`
+- Fingerprinting via `web_accessible_resources`
+
+### Malicious Extension Database
+
+562+ known malicious extension IDs from 3 sources:
+
+| Source | Description |
+|--------|-----------|
+| [palant](https://github.com/palant/malicious-extensions-list) | Curated list by security researcher |
+| [mallorybowes](https://github.com/mallorybowes/chrome-mal-ids) | Aggregated Chrome malicious IDs |
+| [toborrm9](https://github.com/toborrm9/malicious_extension_sentry) | Auto-updated malicious extension sentry |
+
+Auto-updates with 24h cache. Includes Cyberhaven supply chain (Dec 2024), GitLab campaign (Feb 2025), and more.
+
+## ⚙️ Configuration
 
 ```json
+// .extvetrc or .extvetrc.json
 {
-  "ignoreExtensions": [
-    "nkbihfbeogaeaoehlefnkodbefgpgknn"
-  ],
+  "ignoreExtensions": ["nkbihfbeogaeaoehlefnkodbefgpgknn"],
   "severityOverrides": {
     "ext-perm-tabs": "warning",
     "ext-mv2-deprecated": "info"
   },
   "browser": "chrome",
-  "format": "table",
-  "severity": "info",
-  "quiet": false,
-  "verbose": false
+  "format": "table"
 }
 ```
 
-### JavaScript Config
+Also supports `extvet.config.js` and `package.json` `"extvet"` field.
 
-```javascript
-// extvet.config.js
-module.exports = {
-  ignoreExtensions: [
-    'nkbihfbeogaeaoehlefnkodbefgpgknn', // MetaMask - trusted
-  ],
-  severityOverrides: {
-    'ext-perm-tabs': 'warning',
-  },
-};
-```
+## 🚀 GitHub Actions
 
-### package.json
-
-```json
-{
-  "name": "my-project",
-  "extvet": {
-    "ignoreExtensions": ["abc123..."],
-    "browser": "chrome"
-  }
-}
-```
-
-## Permission Risk Levels
-
-| Severity | Permissions |
-|----------|------------|
-| 🔴 Critical | `<all_urls>`, `debugger`, `nativeMessaging`, `proxy`, `webRequestBlocking` |
-| 🟡 Warning | `cookies`, `history`, `webRequest`, `management`, `clipboardRead` |
-| 🔵 Info | `tabs`, `storage`, `notifications`, `bookmarks` |
-
-## Detected Patterns
-
-### Code Patterns
-- `eval()` usage
-- `new Function()` constructor
-- External URL connections (potential C2)
-- Insecure HTTP requests
-- Base64 obfuscation indicators
-
-### Manifest Issues
-- Manifest V2 deprecation
-- Overly broad content script injection
-- MAIN world content scripts
-- Wide host permissions
-
-## Example Output
-
-```
-🦅 ExtVet - Browser Extension Security Scanner
-
-Scanning chrome extensions...
-  Found 12 extensions
-  Scanning: uBlock Origin
-  Scanning: MetaMask
-  Scanning: Suspicious Extension
-
-────────────────────────────────────────────────────────────────────────────────
-FINDINGS
-────────────────────────────────────────────────────────────────────────────────
-
-🔴 CRITICAL: Permission: <all_urls> - Access to ALL websites
-   Extension: Suspicious Extension (abc123...)
-   Rule: ext-perm-all-urls
-   Fix: Review if "<all_urls>" permission is necessary
-
-🟡 WARNING: Uses Manifest V2 (deprecated, will be removed)
-   Extension: Old Extension (def456...)
-   Rule: ext-mv2-deprecated
-   Fix: Update to Manifest V3 or find alternative extension
-
-────────────────────────────────────────────────────────────────────────────────
-SUMMARY
-────────────────────────────────────────────────────────────────────────────────
-🔴 Critical: 1
-🟡 Warning:  3
-🔵 Info:     5
-📊 Total:    9
-────────────────────────────────────────────────────────────────────────────────
-```
-
-## CI/CD Integration
-
-### GitHub Actions
+### Reusable Action
 
 ```yaml
-- name: Scan Browser Extensions
+- uses: taku-tez/ExtVet@main
+  with:
+    command: check
+    target: nkbihfbeogaeaoehlefnkodbefgpgknn
+    format: sarif
+    fail-on: warning
+```
+
+### Manual Setup
+
+```yaml
+- name: Scan Extensions
   run: |
-    npm install -g @extvet/cli
-    extvet scan --format sarif --output extvet.sarif
-    
+    npm install -g browser-extvet
+    extvet scan --format sarif --output extvet.sarif --fail-on warning
+
 - name: Upload SARIF
   uses: github/codeql-action/upload-sarif@v2
   with:
     sarif_file: extvet.sarif
 ```
 
-## Related Projects
+## 🔗 Related Projects
 
-- [AgentVet](https://github.com/taku-tez/agentvet) - AI Agent Security Scanner
-- [PermitVet](https://github.com/taku-tez/PermitVet) - Cloud IAM Permission Auditor
+Part of the **xxVet** security CLI suite:
 
-## License
+- [AgentVet](https://github.com/taku-tez/agentvet) — AI Agent Security Scanner
+- [PermitVet](https://github.com/taku-tez/PermitVet) — Cloud IAM Permission Auditor
+- [ModelVet](https://github.com/taku-tez/ModelVet) — AI Security Posture Management
+- [SubVet](https://github.com/taku-tez/SubVet) — Subdomain Takeover Scanner
+- [RepVet](https://github.com/taku-tez/RepVet) — Package Reputation Scanner
+- [ReachVet](https://github.com/taku-tez/ReachVet) — Reachability Analysis
+
+## 📄 License
 
 MIT
 
-## Author
+## 👤 Author
 
 tez ([@tez2705](https://twitter.com/tez2705))
