@@ -114,7 +114,7 @@ export class Reporter {
     }
   }
 
-  report(findings: Finding[], options: ScanOptions = {}): ScanSummary {
+  async report(findings: Finding[], options: ScanOptions = {}): Promise<ScanSummary> {
     const summary: ScanSummary = {
       critical: findings.filter(f => f.severity === 'critical').length,
       warning: findings.filter(f => f.severity === 'warning').length,
@@ -130,6 +130,18 @@ export class Reporter {
 
     if (this.format === 'sarif') {
       console.log(JSON.stringify(this.toSarif(findings), null, 2));
+      return summary;
+    }
+
+    if (this.format === 'html') {
+      const html = this.toHtml(findings, options);
+      if (options.output) {
+        const fs = await import('fs');
+        fs.writeFileSync(options.output, html);
+        if (!this.quiet) console.log(`📄 HTML report saved to ${options.output}`);
+      } else {
+        console.log(html);
+      }
       return summary;
     }
 
@@ -304,6 +316,89 @@ export class Reporter {
     console.log(`🔵 Info:     ${summary.info}`);
     console.log(`📊 Total:    ${summary.total}`);
     console.log('─'.repeat(80) + '\n');
+  }
+
+  private toHtml(findings: Finding[], options: ScanOptions): string {
+    const critical = findings.filter(f => f.severity === 'critical');
+    const warning = findings.filter(f => f.severity === 'warning');
+    const info = findings.filter(f => f.severity === 'info');
+    const timestamp = new Date().toISOString().replace('T', ' ').split('.')[0];
+
+    const severityIcon = (s: string) => s === 'critical' ? '🔴' : s === 'warning' ? '🟡' : '🔵';
+    const severityClass = (s: string) => s === 'critical' ? 'critical' : s === 'warning' ? 'warning' : 'info';
+
+    const renderFindings = (items: Finding[]) => items.map(f => `
+      <tr class="${severityClass(f.severity)}">
+        <td>${severityIcon(f.severity)} ${f.severity.toUpperCase()}</td>
+        <td>${this.escapeHtml(f.extension)}</td>
+        <td>${this.escapeHtml(f.message)}</td>
+        <td>${this.escapeHtml(f.recommendation || '-')}</td>
+        <td><code>${this.escapeHtml(f.id)}</code></td>
+      </tr>`).join('\n');
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ExtVet Security Report</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0d1117; color: #c9d1d9; padding: 2rem; }
+  h1 { color: #58a6ff; margin-bottom: 0.5rem; }
+  .meta { color: #8b949e; margin-bottom: 2rem; font-size: 0.9rem; }
+  .summary { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.5rem; min-width: 150px; text-align: center; }
+  .card .count { font-size: 2rem; font-weight: bold; }
+  .card.critical .count { color: #f85149; }
+  .card.warning .count { color: #d29922; }
+  .card.info .count { color: #58a6ff; }
+  .card.total .count { color: #c9d1d9; }
+  .card .label { color: #8b949e; font-size: 0.85rem; margin-top: 0.25rem; }
+  table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 8px; overflow: hidden; margin-top: 1rem; }
+  th { background: #21262d; color: #c9d1d9; text-align: left; padding: 0.75rem 1rem; font-size: 0.85rem; border-bottom: 1px solid #30363d; }
+  td { padding: 0.6rem 1rem; border-bottom: 1px solid #21262d; font-size: 0.85rem; vertical-align: top; }
+  tr.critical td { border-left: 3px solid #f85149; }
+  tr.warning td { border-left: 3px solid #d29922; }
+  tr.info td { border-left: 3px solid #58a6ff; }
+  code { background: #21262d; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
+  .footer { margin-top: 2rem; color: #484f58; font-size: 0.8rem; text-align: center; }
+  a { color: #58a6ff; }
+</style>
+</head>
+<body>
+<h1>🦅 ExtVet Security Report</h1>
+<div class="meta">
+  Generated: ${timestamp} | Browser: ${options.browserType || this.browser || 'unknown'} | ExtVet v${VERSION}
+</div>
+<div class="summary">
+  <div class="card critical"><div class="count">${critical.length}</div><div class="label">Critical</div></div>
+  <div class="card warning"><div class="count">${warning.length}</div><div class="label">Warning</div></div>
+  <div class="card info"><div class="count">${info.length}</div><div class="label">Info</div></div>
+  <div class="card total"><div class="count">${findings.length}</div><div class="label">Total</div></div>
+</div>
+${findings.length > 0 ? `
+<table>
+<thead><tr><th>Severity</th><th>Extension</th><th>Finding</th><th>Recommendation</th><th>Rule</th></tr></thead>
+<tbody>
+${renderFindings(critical)}
+${renderFindings(warning)}
+${renderFindings(info)}
+</tbody>
+</table>` : '<p style="text-align:center;color:#3fb950;font-size:1.5rem;margin:3rem 0;">✅ No security issues found!</p>'}
+<div class="footer">
+  <a href="https://github.com/taku-tez/ExtVet">ExtVet</a> — Browser Extension Security Scanner
+</div>
+</body>
+</html>`;
+  }
+
+  private escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   private toSarif(findings: Finding[]): SarifReport {

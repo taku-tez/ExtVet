@@ -39,9 +39,9 @@ describe('Reporter', () => {
     assert.doesNotThrow(() => reporter.warn('Warning message'));
   });
 
-  test('report returns correct summary counts', () => {
+  test('report returns correct summary counts', async () => {
     const reporter = new Reporter({ quiet: true, format: 'table' });
-    const summary = reporter.report(mockFindings);
+    const summary = await await reporter.report(mockFindings);
     
     assert.strictEqual(summary.critical, 1);
     assert.strictEqual(summary.warning, 1);
@@ -49,9 +49,9 @@ describe('Reporter', () => {
     assert.strictEqual(summary.total, 3);
   });
 
-  test('report handles empty findings', () => {
+  test('report handles empty findings', async () => {
     const reporter = new Reporter({ quiet: true, format: 'table' });
-    const summary = reporter.report([]);
+    const summary = await reporter.report([]);
     
     assert.strictEqual(summary.critical, 0);
     assert.strictEqual(summary.warning, 0);
@@ -59,7 +59,7 @@ describe('Reporter', () => {
     assert.strictEqual(summary.total, 0);
   });
 
-  test('report with json format outputs JSON', () => {
+  test('report with json format outputs JSON', async () => {
     // Capture console.log output
     let output = '';
     const originalLog = console.log;
@@ -67,7 +67,7 @@ describe('Reporter', () => {
     
     try {
       const reporter = new Reporter({ format: 'json', browserType: 'chrome' });
-      reporter.report(mockFindings);
+      await reporter.report(mockFindings);
       
       // Verify it's valid JSON
       const parsed = JSON.parse(output);
@@ -81,14 +81,14 @@ describe('Reporter', () => {
     }
   });
 
-  test('report with sarif format outputs SARIF', () => {
+  test('report with sarif format outputs SARIF', async () => {
     let output = '';
     const originalLog = console.log;
     console.log = (msg) => { output = msg; };
     
     try {
       const reporter = new Reporter({ format: 'sarif' });
-      reporter.report(mockFindings);
+      await reporter.report(mockFindings);
       
       const parsed = JSON.parse(output);
       assert.strictEqual(parsed.$schema, 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json');
@@ -99,14 +99,14 @@ describe('Reporter', () => {
     }
   });
 
-  test('json output includes risk scores', () => {
+  test('json output includes risk scores', async () => {
     let output = '';
     const originalLog = console.log;
     console.log = (msg) => { output = msg; };
     
     try {
       const reporter = new Reporter({ format: 'json' });
-      reporter.report(mockFindings);
+      await reporter.report(mockFindings);
       
       const parsed = JSON.parse(output);
       // Extensions is an array, find by id
@@ -120,14 +120,14 @@ describe('Reporter', () => {
     }
   });
 
-  test('json output includes summary risk distribution', () => {
+  test('json output includes summary risk distribution', async () => {
     let output = '';
     const originalLog = console.log;
     console.log = (msg) => { output = msg; };
     
     try {
       const reporter = new Reporter({ format: 'json' });
-      reporter.report(mockFindings);
+      await reporter.report(mockFindings);
       
       const parsed = JSON.parse(output);
       assert.ok(parsed.summary.riskDistribution);
@@ -141,19 +141,19 @@ describe('Reporter', () => {
     }
   });
 
-  test('report does not throw with table format', () => {
+  test('report does not throw with table format', async () => {
     const reporter = new Reporter({ format: 'table', quiet: true });
-    assert.doesNotThrow(() => reporter.report(mockFindings));
+    await reporter.report(mockFindings);
   });
 
-  test('profile is included in json output', () => {
+  test('profile is included in json output', async () => {
     let output = '';
     const originalLog = console.log;
     console.log = (msg) => { output = msg; };
     
     try {
       const reporter = new Reporter({ format: 'json', profile: 'Default' });
-      reporter.report(mockFindings);
+      await reporter.report(mockFindings);
       
       const parsed = JSON.parse(output);
       assert.strictEqual(parsed.meta.profile, 'Default');
@@ -162,14 +162,14 @@ describe('Reporter', () => {
     }
   });
 
-  test('sarif output maps severity correctly', () => {
+  test('sarif output maps severity correctly', async () => {
     let output = '';
     const originalLog = console.log;
     console.log = (msg) => { output = msg; };
     
     try {
       const reporter = new Reporter({ format: 'sarif' });
-      reporter.report(mockFindings);
+      await reporter.report(mockFindings);
       
       const parsed = JSON.parse(output);
       const results = parsed.runs[0].results;
@@ -190,3 +190,56 @@ describe('Reporter', () => {
     }
   });
 });
+
+  test('report with html format outputs HTML', async () => {
+    let output = '';
+    const originalLog = console.log;
+    console.log = (msg) => { output += msg; };
+    
+    try {
+      const reporter = new Reporter({ format: 'html', quiet: false });
+      await reporter.report([
+        { id: 'test-1', severity: 'critical', extension: 'Bad Ext', message: 'Critical issue', recommendation: 'Fix it' },
+      ]);
+      
+      assert.ok(output.includes('<!DOCTYPE html>'));
+      assert.ok(output.includes('ExtVet Security Report'));
+      assert.ok(output.includes('Critical issue'));
+      assert.ok(output.includes('Bad Ext'));
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  test('html output escapes HTML entities', async () => {
+    let output = '';
+    const originalLog = console.log;
+    console.log = (msg) => { output += msg; };
+    
+    try {
+      const reporter = new Reporter({ format: 'html' });
+      await reporter.report([
+        { id: 'test-xss', severity: 'warning', extension: '<script>alert(1)</script>', message: 'Test <b>bold</b>' },
+      ]);
+      
+      assert.ok(output.includes('&lt;script&gt;'));
+      assert.ok(!output.includes('<script>alert'));
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  test('html output shows no-issues message for empty findings', async () => {
+    let output = '';
+    const originalLog = console.log;
+    console.log = (msg) => { output += msg; };
+    
+    try {
+      const reporter = new Reporter({ format: 'html' });
+      await reporter.report([]);
+      
+      assert.ok(output.includes('No security issues found'));
+    } finally {
+      console.log = originalLog;
+    }
+  });

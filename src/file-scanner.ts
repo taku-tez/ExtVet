@@ -96,7 +96,7 @@ export async function scanFile(filePath: string, options: ScanOptions = {}): Pro
     }
   }
   
-  return reporter.report(findings, options);
+  return await reporter.report(findings, options);
 }
 
 /**

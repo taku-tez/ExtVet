@@ -60,7 +60,7 @@ export async function scan(browser: string, options: ScanOptions = {}): Promise<
     logger.debug('Applied severity overrides');
   }
 
-  const summary = reporter.report(findings, options);
+  const summary = await reporter.report(findings, options);
   
   return summary;
 }
@@ -85,7 +85,7 @@ export async function scanUrl(target: string, options: ScanOptions = {}): Promis
     if (result.info.version) console.log(`  Version: ${result.info.version}`);
   }
   
-  const summary = reporter.report(result.findings, options);
+  const summary = await reporter.report(result.findings, options);
   
   return summary;
 }
