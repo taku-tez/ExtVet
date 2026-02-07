@@ -25,6 +25,21 @@ interface DbOptions {
   offline?: boolean;
 }
 
+/**
+ * Parse comma-separated list of extension IDs
+ */
+function parseCsvList(text: string): Set<string> {
+  const ids = new Set<string>();
+  const items = text.split(',');
+  for (const item of items) {
+    const trimmed = item.trim();
+    if (/^[a-z]{32}$/.test(trimmed)) {
+      ids.add(trimmed);
+    }
+  }
+  return ids;
+}
+
 // Sources for malicious extension IDs
 export const SOURCES: Source[] = [
   {
@@ -36,6 +51,11 @@ export const SOURCES: Source[] = [
     name: 'mallorybowes',
     url: 'https://raw.githubusercontent.com/mallorybowes/chrome-mal-ids/master/src/current/crxids.txt',
     parser: parseLineList,
+  },
+  {
+    name: 'toborrm9-sentry',
+    url: 'https://raw.githubusercontent.com/toborrm9/malicious_extension_sentry/main/Malicious-Extensions.csv',
+    parser: parseCsvList,
   },
 ];
 
@@ -99,7 +119,7 @@ function parseLineList(text: string): Set<string> {
 function fetchUrl(url: string): Promise<string | null> {
   return new Promise((resolve, reject) => {
     const req = https.get(url, {
-      headers: { 'User-Agent': 'ExtVet/0.5.0' },
+      headers: { 'User-Agent': 'ExtVet/1.0.0' },
     }, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         return fetchUrl(res.headers.location).then(resolve).catch(reject);
@@ -220,4 +240,37 @@ export async function getMaliciousIds(options: DbOptions = {}): Promise<Set<stri
 export async function isMalicious(extensionId: string, options: DbOptions = {}): Promise<boolean> {
   const ids = await getMaliciousIds(options);
   return ids.has(extensionId);
+}
+
+/**
+ * Get database statistics
+ */
+export interface DbStats {
+  totalIds: number;
+  builtinIds: number;
+  sources: string[];
+  cacheAge: number | null; // ms since last update, null if no cache
+  cachePath: string;
+}
+
+export async function getDbStats(options: DbOptions = {}): Promise<DbStats> {
+  const ids = await getMaliciousIds(options);
+  let cacheAge: number | null = null;
+
+  try {
+    if (fs.existsSync(CACHE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf-8')) as CacheData;
+      cacheAge = Date.now() - (data.timestamp || 0);
+    }
+  } catch {
+    // ignore
+  }
+
+  return {
+    totalIds: ids.size,
+    builtinIds: BUILTIN_IDS.size,
+    sources: SOURCES.map(s => s.name),
+    cacheAge,
+    cachePath: CACHE_FILE,
+  };
 }

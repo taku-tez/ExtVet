@@ -23,6 +23,7 @@ Commands:
   check <url|id>      Check a specific extension from web store
   file <path>         Scan a local extension file (.crx, .xpi, .zip)
   update              Update malicious extension database
+  db-stats            Show database statistics
   version             Show version
 
 Browsers:
@@ -79,6 +80,28 @@ async function main() {
       const { updateMaliciousIds } = await import('../dist/malicious-db.js');
       const ids = await updateMaliciousIds();
       console.log(`\n✅ Database updated: ${ids.size} malicious extensions`);
+      process.exit(0);
+    } catch (error) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  }
+
+  if (command === 'db-stats') {
+    console.log('🦅 ExtVet - Malicious Extension Database Stats\n');
+    try {
+      const { getDbStats } = await import('../dist/malicious-db.js');
+      const stats = await getDbStats({ quiet: true });
+      console.log(`  Total malicious IDs: ${stats.totalIds}`);
+      console.log(`  Built-in IDs:        ${stats.builtinIds}`);
+      console.log(`  Sources:             ${stats.sources.join(', ')}`);
+      if (stats.cacheAge !== null) {
+        const hours = Math.round(stats.cacheAge / 3600000 * 10) / 10;
+        console.log(`  Cache age:           ${hours}h`);
+      } else {
+        console.log(`  Cache:               Not cached (will fetch on next scan)`);
+      }
+      console.log(`  Cache path:          ${stats.cachePath}`);
       process.exit(0);
     } catch (error) {
       console.error(`Error: ${error.message}`);
