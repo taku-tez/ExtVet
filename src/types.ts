@@ -51,6 +51,22 @@ export interface Manifest {
   host_permissions?: string[];
   content_scripts?: ContentScript[];
   background?: Background;
+  content_security_policy?: string | {
+    extension_pages?: string;
+    sandbox?: string;
+  };
+  update_url?: string;
+  externally_connectable?: {
+    matches?: string[];
+    ids?: string[];
+    accepts_tls_channel_id?: boolean;
+  };
+  web_accessible_resources?: Array<string | {
+    resources: string[];
+    matches?: string[];
+    extension_ids?: string[];
+    use_dynamic_url?: boolean;
+  }>;
   browser_specific_settings?: {
     gecko?: {
       id?: string;

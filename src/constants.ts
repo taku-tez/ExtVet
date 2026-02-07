@@ -8,7 +8,7 @@ import type { PermissionDanger, SuspiciousPattern } from './types.js';
 /**
  * ExtVet version - single source of truth
  */
-export const VERSION = '0.7.0';
+export const VERSION = '0.8.0';
 
 /**
  * Dangerous permissions that need security review

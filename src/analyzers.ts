@@ -210,6 +210,221 @@ export function analyzeBackgroundScripts(
 }
 
 /**
+ * Analyze Content Security Policy (CSP)
+ */
+export function analyzeCSP(
+  manifest: Manifest,
+  extInfo: ExtensionInfo,
+  prefix: string = 'ext'
+): Finding[] {
+  const findings: Finding[] = [];
+  const extName = manifest.name || extInfo.id;
+  const csp = manifest.content_security_policy;
+
+  // Get CSP string(s) to analyze
+  const cspStrings: { label: string; value: string }[] = [];
+  if (typeof csp === 'string') {
+    cspStrings.push({ label: 'CSP', value: csp });
+  } else if (csp && typeof csp === 'object') {
+    if (csp.extension_pages) cspStrings.push({ label: 'extension_pages CSP', value: csp.extension_pages });
+    if (csp.sandbox) cspStrings.push({ label: 'sandbox CSP', value: csp.sandbox });
+  }
+
+  // No CSP defined (MV2 only - MV3 has defaults)
+  if (cspStrings.length === 0 && manifest.manifest_version === 2) {
+    findings.push({
+      id: `${prefix}-csp-missing`,
+      severity: 'warning',
+      extension: `${extName} (${extInfo.id})`,
+      message: 'No Content Security Policy defined (MV2 default allows unsafe-eval)',
+      recommendation: 'Add a restrictive content_security_policy to manifest.json',
+    });
+    return findings;
+  }
+
+  for (const { label, value } of cspStrings) {
+    // unsafe-eval
+    if (value.includes("'unsafe-eval'") || value.includes('unsafe-eval')) {
+      findings.push({
+        id: `${prefix}-csp-unsafe-eval`,
+        severity: 'critical',
+        extension: `${extName} (${extInfo.id})`,
+        message: `${label} allows unsafe-eval (code injection risk)`,
+        recommendation: 'Remove unsafe-eval from CSP; use alternatives to eval()',
+      });
+    }
+
+    // unsafe-inline
+    if (value.includes("'unsafe-inline'") || value.includes('unsafe-inline')) {
+      findings.push({
+        id: `${prefix}-csp-unsafe-inline`,
+        severity: 'warning',
+        extension: `${extName} (${extInfo.id})`,
+        message: `${label} allows unsafe-inline (XSS risk)`,
+        recommendation: 'Remove unsafe-inline; use nonces or hashes instead',
+      });
+    }
+
+    // Wildcard sources
+    if (/\bscript-src\b[^;]*\*/.test(value) || /\bdefault-src\b[^;]*\*/.test(value)) {
+      findings.push({
+        id: `${prefix}-csp-wildcard`,
+        severity: 'critical',
+        extension: `${extName} (${extInfo.id})`,
+        message: `${label} uses wildcard (*) in script/default-src (allows any script source)`,
+        recommendation: 'Restrict script sources to specific trusted origins',
+      });
+    }
+
+    // Remote script loading (http/https in script-src)
+    const remoteMatch = value.match(/script-src[^;]*?(https?:\/\/[^\s;'"]+)/);
+    if (remoteMatch) {
+      findings.push({
+        id: `${prefix}-csp-remote-scripts`,
+        severity: 'warning',
+        extension: `${extName} (${extInfo.id})`,
+        message: `${label} allows remote script loading from ${remoteMatch[1]}`,
+        recommendation: 'Bundle scripts locally instead of loading from remote servers',
+      });
+    }
+  }
+
+  return findings;
+}
+
+/**
+ * Analyze update_url (self-update mechanism)
+ */
+export function analyzeUpdateUrl(
+  manifest: Manifest,
+  extInfo: ExtensionInfo,
+  prefix: string = 'ext'
+): Finding[] {
+  const findings: Finding[] = [];
+  const extName = manifest.name || extInfo.id;
+
+  if (!manifest.update_url) return findings;
+
+  const url = manifest.update_url;
+
+  // Non-store update URL (sideloaded auto-update)
+  if (!url.includes('clients2.google.com') && !url.includes('addons.mozilla.org')) {
+    findings.push({
+      id: `${prefix}-update-url-external`,
+      severity: 'warning',
+      extension: `${extName} (${extInfo.id})`,
+      message: `Auto-updates from external server: ${url}`,
+      recommendation: 'External update URLs bypass store review; verify the source is trusted',
+    });
+  }
+
+  // HTTP update URL (MITM risk)
+  if (url.startsWith('http://')) {
+    findings.push({
+      id: `${prefix}-update-url-http`,
+      severity: 'critical',
+      extension: `${extName} (${extInfo.id})`,
+      message: `Update URL uses insecure HTTP: ${url}`,
+      recommendation: 'Use HTTPS for update URLs to prevent man-in-the-middle attacks',
+    });
+  }
+
+  return findings;
+}
+
+/**
+ * Analyze externally_connectable (cross-origin messaging)
+ */
+export function analyzeExternallyConnectable(
+  manifest: Manifest,
+  extInfo: ExtensionInfo,
+  prefix: string = 'ext'
+): Finding[] {
+  const findings: Finding[] = [];
+  const extName = manifest.name || extInfo.id;
+  const ec = manifest.externally_connectable;
+
+  if (!ec) return findings;
+
+  if (ec.matches) {
+    // Wildcard in externally connectable
+    if (ec.matches.some(m => m === '<all_urls>' || m === '*://*/*')) {
+      findings.push({
+        id: `${prefix}-ec-all-urls`,
+        severity: 'critical',
+        extension: `${extName} (${extInfo.id})`,
+        message: 'Any website can send messages to this extension',
+        recommendation: 'Restrict externally_connectable.matches to specific trusted domains',
+      });
+    } else if (ec.matches.some(m => /\*:\/\/|\*\./.test(m))) {
+      findings.push({
+        id: `${prefix}-ec-wildcard`,
+        severity: 'warning',
+        extension: `${extName} (${extInfo.id})`,
+        message: `Broad externally_connectable patterns: ${ec.matches.filter(m => m.includes('*')).join(', ')}`,
+        recommendation: 'Use specific domains instead of wildcards in externally_connectable',
+      });
+    }
+  }
+
+  if (ec.ids && ec.ids.includes('*')) {
+    findings.push({
+      id: `${prefix}-ec-all-extensions`,
+      severity: 'warning',
+      extension: `${extName} (${extInfo.id})`,
+      message: 'Any extension can send messages to this extension',
+      recommendation: 'Restrict externally_connectable.ids to specific trusted extension IDs',
+    });
+  }
+
+  return findings;
+}
+
+/**
+ * Analyze web_accessible_resources (fingerprinting & data leak risk)
+ */
+export function analyzeWebAccessibleResources(
+  manifest: Manifest,
+  extInfo: ExtensionInfo,
+  prefix: string = 'ext'
+): Finding[] {
+  const findings: Finding[] = [];
+  const extName = manifest.name || extInfo.id;
+  const war = manifest.web_accessible_resources;
+
+  if (!war || war.length === 0) return findings;
+
+  // MV2 style (string array) - all resources accessible to all pages
+  if (typeof war[0] === 'string') {
+    findings.push({
+      id: `${prefix}-war-mv2-all`,
+      severity: 'info',
+      extension: `${extName} (${extInfo.id})`,
+      message: `${war.length} web-accessible resources exposed to all pages (MV2 style)`,
+      recommendation: 'Migrate to MV3 to restrict resource access by origin',
+    });
+    return findings;
+  }
+
+  // MV3 style - check for broad matches
+  for (const entry of war) {
+    if (typeof entry === 'object' && entry.matches) {
+      if (entry.matches.includes('<all_urls>') || entry.matches.includes('*://*/*')) {
+        findings.push({
+          id: `${prefix}-war-all-urls`,
+          severity: 'info',
+          extension: `${extName} (${extInfo.id})`,
+          message: `Web-accessible resources (${entry.resources.length} files) exposed to all websites`,
+          recommendation: 'Restrict web_accessible_resources matches to specific domains; broad exposure enables fingerprinting',
+        });
+      }
+    }
+  }
+
+  return findings;
+}
+
+/**
  * Check manifest version deprecation
  */
 export function checkManifestVersion(

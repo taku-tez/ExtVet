@@ -18,6 +18,10 @@ import {
   analyzeContentScripts,
   analyzeBackgroundScripts,
   checkManifestVersion,
+  analyzeCSP,
+  analyzeUpdateUrl,
+  analyzeExternallyConnectable,
+  analyzeWebAccessibleResources,
   loadMaliciousDb,
   checkKnownMalicious,
   parseManifest,
@@ -356,6 +360,10 @@ export async function scanSafari(options: ScanOptions = {}): Promise<Finding[]> 
     findings.push(...analyzeContentScripts(manifest, ext, 'safari'));
     findings.push(...analyzeSafariSpecific(manifest, ext));
     findings.push(...checkManifestVersion(manifest, ext, 'safari'));
+    findings.push(...analyzeCSP(manifest, ext, 'safari'));
+    findings.push(...analyzeUpdateUrl(manifest, ext, 'safari'));
+    findings.push(...analyzeExternallyConnectable(manifest, ext, 'safari'));
+    findings.push(...analyzeWebAccessibleResources(manifest, ext, 'safari'));
     
     // Analyze background scripts for modern extensions
     if (ext.type === 'directory') {

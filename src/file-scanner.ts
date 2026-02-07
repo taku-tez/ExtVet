@@ -12,6 +12,10 @@ import {
   analyzePermissions,
   analyzeScriptContent,
   checkManifestVersion,
+  analyzeCSP,
+  analyzeUpdateUrl,
+  analyzeExternallyConnectable,
+  analyzeWebAccessibleResources,
 } from './analyzers.js';
 import type { ScanOptions, ScanSummary, Manifest, Finding } from './types.js';
 
@@ -67,6 +71,10 @@ export async function scanFile(filePath: string, options: ScanOptions = {}): Pro
     // Run analyzers
     findings.push(...analyzePermissions(manifest, extInfo, 'file'));
     findings.push(...checkManifestVersion(manifest, extInfo, 'file'));
+    findings.push(...analyzeCSP(manifest, extInfo, 'file'));
+    findings.push(...analyzeUpdateUrl(manifest, extInfo, 'file'));
+    findings.push(...analyzeExternallyConnectable(manifest, extInfo, 'file'));
+    findings.push(...analyzeWebAccessibleResources(manifest, extInfo, 'file'));
     
     // Scan JavaScript files
     const jsFiles = findJsFiles(extractedPath);

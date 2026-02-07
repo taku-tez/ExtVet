@@ -12,6 +12,10 @@ import {
   analyzePermissions,
   analyzeContentScripts,
   analyzeBackgroundScripts,
+  analyzeCSP,
+  analyzeUpdateUrl,
+  analyzeExternallyConnectable,
+  analyzeWebAccessibleResources,
   loadMaliciousDb,
   checkKnownMalicious,
 } from '../analyzers.js';
@@ -307,6 +311,10 @@ export async function scanFirefox(options: ScanOptions = {}): Promise<Finding[]>
       findings.push(...analyzePermissions(manifest, ext, 'ff', FIREFOX_PERMISSIONS));
       findings.push(...analyzeContentScripts(manifest, ext, 'ff'));
       findings.push(...analyzeFirefoxSpecific(manifest, ext));
+      findings.push(...analyzeCSP(manifest, ext, 'ff'));
+      findings.push(...analyzeUpdateUrl(manifest, ext, 'ff'));
+      findings.push(...analyzeExternallyConnectable(manifest, ext, 'ff'));
+      findings.push(...analyzeWebAccessibleResources(manifest, ext, 'ff'));
       
       // Only analyze scripts for unpacked extensions
       if (ext.type !== 'xpi') {
