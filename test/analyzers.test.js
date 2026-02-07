@@ -440,3 +440,56 @@ describe('analyzeWebStoreInfo', () => {
     assert.ok(findings.some(f => f.id === 'webstore-not-found'));
   });
 });
+
+// =============================================
+// analyzeObfuscation
+// =============================================
+
+const { analyzeObfuscation } = await import('../dist/analyzers.js');
+
+describe('analyzeObfuscation', () => {
+  const ext = { id: 'test-ext', path: '/tmp' };
+  const manifest = { name: 'TestExt', manifest_version: 3 };
+
+  test('detects hex/unicode escape overuse', () => {
+    const code = Array(60).fill('var x = "\\x61\\x62";').join('\n');
+    const findings = analyzeObfuscation(code, 'bg.js', ext, manifest);
+    assert.ok(findings.some(f => f.id.includes('obfuscation-escapes')));
+  });
+
+  test('detects packed long lines', () => {
+    const code = 'a'.repeat(6000);
+    const findings = analyzeObfuscation(code, 'bg.js', ext, manifest);
+    assert.ok(findings.some(f => f.id.includes('obfuscation-packed')));
+  });
+
+  test('detects string rotation pattern', () => {
+    const code = 'var _0x1a2b = ["hello","world"]; function _0x3c4d(i) { return _0x1a2b[i]; }';
+    const findings = analyzeObfuscation(code, 'bg.js', ext, manifest);
+    assert.ok(findings.some(f => f.id.includes('obfuscation-string-rotation')));
+  });
+
+  test('detects excessive fromCharCode', () => {
+    const code = Array(10).fill('var c = String.fromCharCode(72);').join('\n');
+    const findings = analyzeObfuscation(code, 'bg.js', ext, manifest);
+    assert.ok(findings.some(f => f.id.includes('obfuscation-fromcharcode')));
+  });
+
+  test('detects obfuscated variable names', () => {
+    const code = Array(15).fill('var _0xabcd1234 = 1;').join('\n');
+    const findings = analyzeObfuscation(code, 'bg.js', ext, manifest);
+    assert.ok(findings.some(f => f.id.includes('obfuscation-varnames')));
+  });
+
+  test('detects Dean Edwards packer', () => {
+    const code = "eval(function(p,a,c,k,e,d){return 'packed'})";
+    const findings = analyzeObfuscation(code, 'bg.js', ext, manifest);
+    assert.ok(findings.some(f => f.id.includes('obfuscation-packer')));
+  });
+
+  test('returns empty for clean code', () => {
+    const code = 'console.log("hello world");';
+    const findings = analyzeObfuscation(code, 'bg.js', ext, manifest);
+    assert.strictEqual(findings.length, 0);
+  });
+});

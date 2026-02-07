@@ -11,6 +11,7 @@ import { Reporter } from './reporter.js';
 import {
   analyzePermissions,
   analyzeScriptContent,
+  analyzeObfuscation,
   checkManifestVersion,
   analyzePermissionCombos,
   analyzeCSP,
@@ -85,6 +86,7 @@ export async function scanFile(filePath: string, options: ScanOptions = {}): Pro
         const content = fs.readFileSync(jsFile, 'utf-8');
         const relPath = path.relative(extractedPath, jsFile);
         findings.push(...analyzeScriptContent(content, relPath, extInfo, manifest, 'file'));
+        findings.push(...analyzeObfuscation(content, relPath, extInfo, manifest, 'file'));
       } catch {
         // Skip unreadable files
       }

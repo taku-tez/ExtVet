@@ -201,6 +201,7 @@ export function analyzeBackgroundScripts(
         prefix,
         additionalPatterns
       ));
+      findings.push(...analyzeObfuscation(content, script, extInfo, manifest, prefix));
     } catch (err) {
       logger.debug(`Failed to analyze script ${script}: ${(err as Error).message}`);
     }
@@ -521,6 +522,97 @@ export async function loadMaliciousDb(options: { quiet?: boolean } = {}): Promis
   }
   
   return KNOWN_MALICIOUS;
+}
+
+/**
+ * Detect obfuscated/packed JavaScript code
+ * Obfuscation is a strong signal of malicious intent in browser extensions
+ */
+export function analyzeObfuscation(
+  content: string,
+  scriptName: string,
+  extInfo: ExtensionInfo,
+  manifest: Manifest,
+  prefix: string = 'ext'
+): Finding[] {
+  const findings: Finding[] = [];
+  const extName = manifest.name || extInfo.id;
+
+  // 1. High ratio of hex/unicode escapes (e.g. \x61\x62, \u0041)
+  const hexEscapes = (content.match(/\\x[0-9a-fA-F]{2}/g) || []).length;
+  const unicodeEscapes = (content.match(/\\u[0-9a-fA-F]{4}/g) || []).length;
+  const escapeCount = hexEscapes + unicodeEscapes;
+  if (escapeCount > 50) {
+    findings.push({
+      id: `${prefix}-obfuscation-escapes`,
+      severity: escapeCount > 200 ? 'critical' : 'warning',
+      extension: `${extName} (${extInfo.id})`,
+      message: `Heavy use of hex/unicode escapes (${escapeCount}) in ${scriptName}`,
+      recommendation: 'Code may be obfuscated to hide malicious behavior; manual review recommended',
+    });
+  }
+
+  // 2. Long single-line strings (packed code)
+  const lines = content.split('\n');
+  const longLines = lines.filter(l => l.length > 5000);
+  if (longLines.length > 0) {
+    findings.push({
+      id: `${prefix}-obfuscation-packed`,
+      severity: 'warning',
+      extension: `${extName} (${extInfo.id})`,
+      message: `Packed/minified code detected in ${scriptName} (${longLines.length} lines >5000 chars)`,
+      recommendation: 'Heavily packed code in extensions may indicate obfuscation; review carefully',
+    });
+  }
+
+  // 3. String array rotation pattern (common obfuscator signature)
+  // e.g., var _0x1a2b = ['string1', 'string2', ...]; function _0x3c4d(i) { ... }
+  if (/var\s+_0x[a-f0-9]+\s*=\s*\[/.test(content) || /function\s+_0x[a-f0-9]+/.test(content)) {
+    findings.push({
+      id: `${prefix}-obfuscation-string-rotation`,
+      severity: 'critical',
+      extension: `${extName} (${extInfo.id})`,
+      message: `JavaScript obfuscator string rotation pattern in ${scriptName}`,
+      recommendation: 'This pattern is commonly used by malicious extensions to evade detection',
+    });
+  }
+
+  // 4. Excessive use of String.fromCharCode
+  const fromCharCodeCount = (content.match(/String\.fromCharCode/g) || []).length;
+  if (fromCharCodeCount > 5) {
+    findings.push({
+      id: `${prefix}-obfuscation-fromcharcode`,
+      severity: fromCharCodeCount > 20 ? 'critical' : 'warning',
+      extension: `${extName} (${extInfo.id})`,
+      message: `Excessive String.fromCharCode usage (${fromCharCodeCount}×) in ${scriptName}`,
+      recommendation: 'Dynamic string construction may be hiding malicious URLs or code',
+    });
+  }
+
+  // 5. High entropy variable names (lots of _0x... or single-char vars)
+  const obfuscatedVars = (content.match(/\b_0x[a-f0-9]{4,}\b/g) || []);
+  if (obfuscatedVars.length > 10) {
+    findings.push({
+      id: `${prefix}-obfuscation-varnames`,
+      severity: 'warning',
+      extension: `${extName} (${extInfo.id})`,
+      message: `Obfuscated variable names detected (${obfuscatedVars.length}×) in ${scriptName}`,
+      recommendation: 'Obfuscated identifiers reduce auditability and may hide malicious logic',
+    });
+  }
+
+  // 6. Dean Edwards packer signature
+  if (/eval\(function\(p,a,c,k,e,[dr]\)/.test(content)) {
+    findings.push({
+      id: `${prefix}-obfuscation-packer`,
+      severity: 'critical',
+      extension: `${extName} (${extInfo.id})`,
+      message: `Dean Edwards packer detected in ${scriptName}`,
+      recommendation: 'Packed code is a common technique in malicious extensions; unpack and review',
+    });
+  }
+
+  return findings;
 }
 
 /**
