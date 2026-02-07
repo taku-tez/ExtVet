@@ -517,3 +517,60 @@ describe('Malicious DB Sources', () => {
     }
   });
 });
+
+// =============================================
+// Enhanced Permission Detection
+// =============================================
+
+describe('Enhanced Permission Detection', () => {
+  test('detects MV3 scripting permission', () => {
+    const manifest = { permissions: ['scripting'], manifest_version: 3 };
+    const ext = { id: 'test', path: '/tmp' };
+    const findings = analyzePermissions(manifest, ext);
+    assert.ok(findings.some(f => f.message.includes('inject scripts')));
+  });
+
+  test('detects desktopCapture as critical', () => {
+    const manifest = { permissions: ['desktopCapture'], manifest_version: 3 };
+    const ext = { id: 'test', path: '/tmp' };
+    const findings = analyzePermissions(manifest, ext);
+    assert.ok(findings.some(f => f.severity === 'critical' && f.message.includes('screen')));
+  });
+
+  test('detects identity permission', () => {
+    const manifest = { permissions: ['identity'], manifest_version: 3 };
+    const ext = { id: 'test', path: '/tmp' };
+    const findings = analyzePermissions(manifest, ext);
+    assert.ok(findings.some(f => f.message.includes('OAuth')));
+  });
+
+  test('detects declarativeNetRequestWithHostAccess as critical', () => {
+    const manifest = { permissions: ['declarativeNetRequestWithHostAccess'], manifest_version: 3 };
+    const ext = { id: 'test', path: '/tmp' };
+    const findings = analyzePermissions(manifest, ext);
+    assert.ok(findings.some(f => f.severity === 'critical'));
+  });
+});
+
+describe('Enhanced Permission Combos', () => {
+  test('detects scripting + all_urls combo', () => {
+    const manifest = { permissions: ['scripting'], host_permissions: ['<all_urls>'], manifest_version: 3 };
+    const ext = { id: 'test', path: '/tmp' };
+    const findings = analyzePermissionCombos(manifest, ext);
+    assert.ok(findings.some(f => f.severity === 'critical' && f.message.includes('inject')));
+  });
+
+  test('detects identity + all_urls combo', () => {
+    const manifest = { permissions: ['identity'], host_permissions: ['<all_urls>'], manifest_version: 3 };
+    const ext = { id: 'test', path: '/tmp' };
+    const findings = analyzePermissionCombos(manifest, ext);
+    assert.ok(findings.some(f => f.message.includes('OAuth')));
+  });
+
+  test('detects desktopCapture + all_urls combo', () => {
+    const manifest = { permissions: ['desktopCapture'], host_permissions: ['<all_urls>'], manifest_version: 3 };
+    const ext = { id: 'test', path: '/tmp' };
+    const findings = analyzePermissionCombos(manifest, ext);
+    assert.ok(findings.some(f => f.message.includes('spyware')));
+  });
+});

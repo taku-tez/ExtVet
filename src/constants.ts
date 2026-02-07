@@ -8,7 +8,7 @@ import type { PermissionDanger, SuspiciousPattern } from './types.js';
 /**
  * ExtVet version - single source of truth
  */
-export const VERSION = '1.5.0';
+export const VERSION = '1.7.0';
 
 /**
  * Dangerous permissions that need security review
@@ -38,12 +38,38 @@ export const DANGEROUS_PERMISSIONS: Record<string, PermissionDanger> = {
   'privacy': { severity: 'warning', msg: 'Can modify privacy settings' },
   'browsingData': { severity: 'warning', msg: 'Can clear browsing data' },
   
+  // Warning - Identity & Auth
+  'identity': { severity: 'warning', msg: 'Can access OAuth tokens and user identity' },
+  'identity.email': { severity: 'warning', msg: 'Can read user email address' },
+  
+  // Warning - System access
+  'system.cpu': { severity: 'info', msg: 'Can read CPU info (fingerprinting)' },
+  'system.memory': { severity: 'info', msg: 'Can read memory info (fingerprinting)' },
+  'system.display': { severity: 'info', msg: 'Can read display info (fingerprinting)' },
+  'topSites': { severity: 'warning', msg: 'Can read most visited sites' },
+  'webNavigation': { severity: 'info', msg: 'Can observe navigation events' },
+  'declarativeNetRequest': { severity: 'warning', msg: 'Can modify network requests via rules (MV3)' },
+  'declarativeNetRequestWithHostAccess': { severity: 'critical', msg: 'Can modify network requests on matched hosts (MV3)' },
+  'scripting': { severity: 'warning', msg: 'Can inject scripts into web pages (MV3)' },
+  'offscreen': { severity: 'info', msg: 'Can create offscreen documents' },
+  'sidePanel': { severity: 'info', msg: 'Can use side panel API' },
+  'desktopCapture': { severity: 'critical', msg: 'Can capture screen/window/tab content' },
+  'tabCapture': { severity: 'critical', msg: 'Can capture tab audio/video' },
+  'pageCapture': { severity: 'warning', msg: 'Can save pages as MHTML' },
+  'ttsEngine': { severity: 'info', msg: 'Implements text-to-speech engine' },
+  'unlimitedStorage': { severity: 'info', msg: 'Unlimited local storage (data hoarding risk)' },
+  'contentSettings': { severity: 'warning', msg: 'Can modify content settings (JS, cookies, images, etc.)' },
+  'fontSettings': { severity: 'info', msg: 'Can modify font settings' },
+  
   // Info - Common but notable
   'storage': { severity: 'info', msg: 'Can store data locally' },
   'clipboardRead': { severity: 'warning', msg: 'Can read clipboard' },
   'clipboardWrite': { severity: 'info', msg: 'Can write to clipboard' },
   'geolocation': { severity: 'warning', msg: 'Can access location' },
   'notifications': { severity: 'info', msg: 'Can show notifications' },
+  'alarms': { severity: 'info', msg: 'Can schedule periodic tasks' },
+  'contextMenus': { severity: 'info', msg: 'Can add context menu items' },
+  'activeTab': { severity: 'info', msg: 'Temporary access to active tab on click' },
 };
 
 /**
@@ -182,6 +208,48 @@ export const DANGEROUS_COMBOS: PermissionCombo[] = [
     severity: 'warning',
     msg: 'Can track physical location and send it to any website',
     recommendation: 'Verify location access is necessary for the extension functionality',
+  },
+  {
+    permissions: ['scripting', '<all_urls>'],
+    severity: 'critical',
+    msg: 'Can inject arbitrary scripts into ALL websites (MV3 equivalent of full code injection)',
+    recommendation: 'Scripting API + all URLs allows injecting code into any page including banking sites',
+  },
+  {
+    permissions: ['declarativeNetRequest', 'cookies'],
+    severity: 'warning',
+    msg: 'Can modify network requests and access cookies (request hijacking + session theft)',
+    recommendation: 'This combination enables request redirection with cookie theft',
+  },
+  {
+    permissions: ['identity', '<all_urls>'],
+    severity: 'critical',
+    msg: 'Can steal OAuth tokens and send them to any website',
+    recommendation: 'Identity access with broad host permissions enables token exfiltration',
+  },
+  {
+    permissions: ['desktopCapture', '<all_urls>'],
+    severity: 'critical',
+    msg: 'Can capture screen content and exfiltrate to any website (spyware)',
+    recommendation: 'Screen capture with network access is a spyware pattern',
+  },
+  {
+    permissions: ['tabCapture', '<all_urls>'],
+    severity: 'critical',
+    msg: 'Can capture tab audio/video and exfiltrate (surveillance)',
+    recommendation: 'Tab capture with broad host access enables surveillance',
+  },
+  {
+    permissions: ['topSites', 'history', 'bookmarks'],
+    severity: 'warning',
+    msg: 'Can build comprehensive user profiling (top sites + history + bookmarks)',
+    recommendation: 'This combination enables extensive user behavior profiling',
+  },
+  {
+    permissions: ['contentSettings', '<all_urls>'],
+    severity: 'warning',
+    msg: 'Can disable security settings (JavaScript, cookies) on all sites',
+    recommendation: 'Content settings modification with broad access can weaken site security',
   },
 ];
 
