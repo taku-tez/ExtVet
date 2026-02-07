@@ -57,6 +57,11 @@ export const SOURCES: Source[] = [
     url: 'https://raw.githubusercontent.com/toborrm9/malicious_extension_sentry/main/Malicious-Extensions.csv',
     parser: parseCsvList,
   },
+  {
+    name: 'gnyman',
+    url: 'https://raw.githubusercontent.com/gnyman/chromium-mal-ids/master/src/current/crxids.txt',
+    parser: parseLineList,
+  },
 ];
 
 // Local cache location
@@ -91,8 +96,20 @@ const BUILTIN_IDS = new Set([
   'bpconcjcammlapcogcnnelfmaeghhagj', // Nimble capture
   'gdocgbfmddcfnlnpmnghmjicjognhonm', // KProxy
   
-  // Cyberhaven Dec 2024 supply chain attack
+  // Cyberhaven Dec 2024 supply chain attack + related compromises
   'pajkjnmeojmbapicmbpliphjmcekeaac', // Cyberhaven (compromised)
+  'cedgndijpacnfbdggppddacngjfdkaca', // Reader Mode (compromised Dec 2024)
+  'epdjhgbipjpbbhoccdeipghoihibnfja', // Rewards Search Automator (compromised)
+  'dpggmcodlahmljkhlmpgpdcffdaoccni', // Tackker - online keystrokes & clicks counter
+  'bibjgkidgpfbblifamdlghpdcehdkga',  // Bookmark Favicon Changer (compromised)
+  'jdkknkkbebbapilgoeccciglkfbmbnfm', // ChatGPT App (compromised Jan 2025)
+  'dailolanldkdemoeaoajamojkcpiighn', // VPNCity (compromised)
+  'hmiaoahjllhfgebflooeeefeiafpkfde', // AI Assistant - ChatGPT (compromised)
+  'lbneaaedflankmgmfbmaplggbmjjmbae', // Search Copilot AI Assistant for Chrome
+  'mnhcaekfccgkhpokfmaogljaihlopaam', // GPT 4 Summary with OpenAI
+  'befflofjcniongenjmbkgkoljhgliihe', // YesCaptcha assistant (compromised)
+  'kkodiihpgodmdankclfibbiphjkfdenh', // Bookmark Favicon Changer v2
+  'iabornaahpiecdnnfemfddmkgmfpneldd', // GraphQL Network Inspector (compromised Jan 2025)
 ]);
 
 /**

@@ -493,3 +493,27 @@ describe('analyzeObfuscation', () => {
     assert.strictEqual(findings.length, 0);
   });
 });
+
+// =============================================
+// Malicious DB Sources
+// =============================================
+
+const { SOURCES } = await import('../dist/malicious-db.js');
+
+describe('Malicious DB Sources', () => {
+  test('has 4 sources configured', () => {
+    assert.strictEqual(SOURCES.length, 4);
+  });
+
+  test('includes gnyman source', () => {
+    assert.ok(SOURCES.some(s => s.name === 'gnyman'));
+  });
+
+  test('all sources have required fields', () => {
+    for (const source of SOURCES) {
+      assert.ok(source.name, 'source should have name');
+      assert.ok(source.url, 'source should have url');
+      assert.ok(typeof source.parser === 'function', 'source should have parser');
+    }
+  });
+});
