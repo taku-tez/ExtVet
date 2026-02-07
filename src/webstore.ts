@@ -77,6 +77,14 @@ async function fetchChromeWebStore(extensionId: string): Promise<ExtendedWebStor
     const usersMatch = html.match(/(\d[\d,]+)\s+users/i);
     if (usersMatch) info.users = parseInt(usersMatch[1].replace(/,/g, ''), 10);
     
+    const versionMatch = html.match(/version[:\s]*([\d.]+)/i);
+    if (versionMatch) info.version = versionMatch[1];
+
+    const updatedMatch = html.match(/Updated[:\s]*(\w+ \d+, \d{4})/);
+    if (updatedMatch) {
+      try { info.lastUpdated = new Date(updatedMatch[1]).toISOString(); } catch { /* skip */ }
+    }
+
     if (!info.name && (html.includes('404') || html.includes('not found'))) {
       return null;
     }
@@ -129,7 +137,7 @@ async function fetchFirefoxAddons(addonId: string): Promise<ExtendedWebStoreInfo
 /**
  * Analyze web store info for security concerns
  */
-function analyzeWebStoreInfo(info: ExtendedWebStoreInfo | null): Finding[] {
+async function analyzeWebStoreInfo(info: ExtendedWebStoreInfo | null): Promise<Finding[]> {
   const findings: Finding[] = [];
   
   if (!info) {
@@ -155,6 +163,50 @@ function analyzeWebStoreInfo(info: ExtendedWebStoreInfo | null): Finding[] {
     });
   }
   
+  // Check against malicious DB
+  if (info.id && /^[a-z]{32}$/.test(info.id)) {
+    try {
+      const { getMaliciousIds } = await import('./malicious-db.js');
+      const maliciousIds = await getMaliciousIds({ quiet: true });
+      if (maliciousIds.has(info.id)) {
+        findings.push({
+          id: 'webstore-known-malicious',
+          severity: 'critical',
+          extension: extName,
+          message: 'Extension is flagged as KNOWN MALICIOUS in threat databases',
+          recommendation: 'Remove this extension immediately',
+        });
+      }
+    } catch {
+      // DB unavailable, skip
+    }
+  }
+
+  // Stale extension detection
+  if (info.lastUpdated) {
+    const lastUpdate = new Date(info.lastUpdated);
+    const now = new Date();
+    const daysSinceUpdate = Math.floor((now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysSinceUpdate > 730) {
+      findings.push({
+        id: 'webstore-abandoned',
+        severity: 'warning',
+        extension: extName,
+        message: `Extension not updated in ${Math.floor(daysSinceUpdate / 365)} years (last: ${lastUpdate.toISOString().split('T')[0]})`,
+        recommendation: 'Abandoned extensions may have unpatched vulnerabilities; consider alternatives',
+      });
+    } else if (daysSinceUpdate > 365) {
+      findings.push({
+        id: 'webstore-stale',
+        severity: 'info',
+        extension: extName,
+        message: `Extension not updated in over a year (last: ${lastUpdate.toISOString().split('T')[0]})`,
+        recommendation: 'Check if the extension is still actively maintained',
+      });
+    }
+  }
+
   if (info.rating && info.rating < 3.0) {
     findings.push({
       id: 'webstore-low-rating',
@@ -241,7 +293,7 @@ export async function checkWebStore(target: string, options: CheckOptions = {}):
     info = await fetchFirefoxAddons(extensionId);
   }
   
-  const findings = analyzeWebStoreInfo(info);
+  const findings = await analyzeWebStoreInfo(info);
   
   return {
     info,
@@ -256,7 +308,7 @@ function fetchUrl(url: string, options: FetchOptions = {}): Promise<string | nul
   return new Promise((resolve, reject) => {
     const req = https.get(url, {
       headers: {
-        'User-Agent': 'ExtVet/0.5.0',
+        'User-Agent': 'ExtVet/1.1.0',
         'Accept': options.json ? 'application/json' : 'text/html',
       },
     }, (res) => {

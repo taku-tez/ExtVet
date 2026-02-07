@@ -400,3 +400,43 @@ describe('analyzePermissionCombos', () => {
     assert.ok(findings.some(f => f.message.includes('dropper')));
   });
 });
+
+// WebStore analysis tests
+import { analyzeWebStoreInfo } from '../dist/webstore.js';
+
+describe('analyzeWebStoreInfo', () => {
+  test('detects stale extension (>1 year)', async () => {
+    const info = { name: 'OldExt', lastUpdated: '2024-01-01T00:00:00Z', users: 5000, rating: 4.5 };
+    const findings = await analyzeWebStoreInfo(info);
+    assert.ok(findings.some(f => f.id === 'webstore-stale' || f.id === 'webstore-abandoned'));
+  });
+
+  test('detects abandoned extension (>2 years)', async () => {
+    const info = { name: 'DeadExt', lastUpdated: '2023-01-01T00:00:00Z', users: 5000, rating: 4.5 };
+    const findings = await analyzeWebStoreInfo(info);
+    assert.ok(findings.some(f => f.id === 'webstore-abandoned'));
+  });
+
+  test('no stale warning for recent extension', async () => {
+    const info = { name: 'FreshExt', lastUpdated: new Date().toISOString(), users: 5000, rating: 4.5 };
+    const findings = await analyzeWebStoreInfo(info);
+    assert.ok(!findings.some(f => f.id.includes('stale') || f.id.includes('abandoned')));
+  });
+
+  test('detects low user count', async () => {
+    const info = { name: 'SmallExt', users: 50, rating: 4.5 };
+    const findings = await analyzeWebStoreInfo(info);
+    assert.ok(findings.some(f => f.id === 'webstore-low-users'));
+  });
+
+  test('detects low rating', async () => {
+    const info = { name: 'BadExt', users: 5000, rating: 2.1 };
+    const findings = await analyzeWebStoreInfo(info);
+    assert.ok(findings.some(f => f.id === 'webstore-low-rating'));
+  });
+
+  test('returns not-found for null info', async () => {
+    const findings = await analyzeWebStoreInfo(null);
+    assert.ok(findings.some(f => f.id === 'webstore-not-found'));
+  });
+});
