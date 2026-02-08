@@ -61,6 +61,7 @@ export interface Manifest {
   manifest_version?: number;
   permissions?: string[];
   optional_permissions?: string[];
+  optional_host_permissions?: string[];
   host_permissions?: string[];
   content_scripts?: ContentScript[];
   background?: Background;

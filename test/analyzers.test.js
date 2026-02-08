@@ -957,3 +957,60 @@ describe('scanFile enhanced', () => {
     fs.unlinkSync(tmpFile);
   });
 });
+
+import { analyzeOptionalPermissions } from '../dist/analyzers.js';
+
+describe('analyzeOptionalPermissions', () => {
+  const mockExtInfo = { id: 'test-opt-ext', version: '1.0.0', path: '' };
+
+  test('returns empty when no optional permissions', () => {
+    const manifest = { name: 'Safe', permissions: ['storage'] };
+    const findings = analyzeOptionalPermissions(manifest, mockExtInfo);
+    assert.strictEqual(findings.length, 0);
+  });
+
+  test('detects critical permissions in optional', () => {
+    const manifest = {
+      name: 'Sneaky',
+      permissions: ['storage'],
+      optional_permissions: ['debugger', 'nativeMessaging'],
+    };
+    const findings = analyzeOptionalPermissions(manifest, mockExtInfo);
+    const critical = findings.find(f => f.id.includes('optional-critical'));
+    assert.ok(critical, 'Should flag critical optional permissions');
+  });
+
+  test('detects broad host in optional_host_permissions', () => {
+    const manifest = {
+      name: 'Sneaky2',
+      permissions: ['storage'],
+      optional_host_permissions: ['<all_urls>'],
+    };
+    const findings = analyzeOptionalPermissions(manifest, mockExtInfo);
+    const broad = findings.find(f => f.id.includes('optional-all-urls'));
+    assert.ok(broad, 'Should flag broad optional host permissions');
+  });
+
+  test('detects privilege escalation pattern', () => {
+    const manifest = {
+      name: 'Trojan',
+      permissions: ['storage'],
+      optional_permissions: ['debugger', 'webRequestBlocking'],
+      optional_host_permissions: ['<all_urls>'],
+    };
+    const findings = analyzeOptionalPermissions(manifest, mockExtInfo);
+    const escalation = findings.find(f => f.id.includes('escalation-pattern'));
+    assert.ok(escalation, 'Should detect privilege escalation pattern');
+  });
+
+  test('no escalation pattern when install already has critical perms', () => {
+    const manifest = {
+      name: 'Honest',
+      permissions: ['<all_urls>', 'debugger'],
+      optional_permissions: ['nativeMessaging'],
+    };
+    const findings = analyzeOptionalPermissions(manifest, mockExtInfo);
+    const escalation = findings.find(f => f.id.includes('escalation-pattern'));
+    assert.ok(!escalation, 'Should not flag escalation when already dangerous at install');
+  });
+});

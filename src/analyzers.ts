@@ -294,6 +294,67 @@ export function analyzeServiceWorker(
 }
 
 /**
+ * Analyze optional_permissions for privilege escalation risk
+ * Extensions can silently request these after install via chrome.permissions.request()
+ */
+export function analyzeOptionalPermissions(
+  manifest: Manifest,
+  extInfo: ExtensionInfo,
+  prefix: string = 'ext'
+): Finding[] {
+  const findings: Finding[] = [];
+  const extName = manifest.name || extInfo.id;
+  const optional = manifest.optional_permissions || [];
+  const optionalHosts = (manifest.optional_host_permissions || []) as string[];
+
+  if (optional.length === 0 && optionalHosts.length === 0) return findings;
+
+  const criticalOptional = optional.filter(p =>
+    DANGEROUS_PERMISSIONS[p]?.severity === 'critical'
+  );
+  const allUrlsOptional = [...optional, ...optionalHosts].filter(p =>
+    p === '<all_urls>' || p === '*://*/*' || p === 'http://*/*' || p === 'https://*/*'
+  );
+
+  // Critical permissions hidden in optional
+  if (criticalOptional.length > 0) {
+    findings.push({
+      id: `${prefix}-optional-critical`,
+      severity: 'warning',
+      extension: `${extName} (${extInfo.id})`,
+      message: `Critical permissions in optional_permissions: ${criticalOptional.join(', ')}`,
+      recommendation: 'Extension can silently escalate to these permissions after install via user prompt',
+    });
+  }
+
+  // Broad host access in optional
+  if (allUrlsOptional.length > 0) {
+    findings.push({
+      id: `${prefix}-optional-all-urls`,
+      severity: 'warning',
+      extension: `${extName} (${extInfo.id})`,
+      message: 'Broad host access in optional permissions (can escalate to all websites)',
+      recommendation: 'Extension starts with limited access but can request access to all sites later',
+    });
+  }
+
+  // Privilege gap: minimal install permissions but broad optional
+  const installPerms = manifest.permissions || [];
+  const installDangerous = installPerms.filter(p => DANGEROUS_PERMISSIONS[p]?.severity === 'critical');
+  if (installDangerous.length === 0 && (criticalOptional.length >= 2 || (criticalOptional.length > 0 && allUrlsOptional.length > 0))) {
+    findings.push({
+      id: `${prefix}-optional-escalation-pattern`,
+      severity: 'warning',
+      extension: `${extName} (${extInfo.id})`,
+      message: 'Privilege escalation pattern: minimal install permissions with broad optional permissions',
+      recommendation: 'This pattern is used to pass store review with minimal permissions then escalate after install',
+    });
+  }
+
+  return findings;
+}
+
+/**
  * Analyze dangerous permission combinations
  */
 export function analyzePermissionCombos(
