@@ -1161,3 +1161,47 @@ describe('Vulnerable Library Detection', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 });
+
+describe('Web Store Analysis Enhancements', () => {
+  let analyzeWebStoreInfo;
+
+  test('load analyzeWebStoreInfo', async () => {
+    const mod = await import('../dist/webstore.js');
+    analyzeWebStoreInfo = mod.analyzeWebStoreInfo;
+    assert.ok(analyzeWebStoreInfo);
+  });
+
+  test('flags new extension with low users', async () => {
+    const info = {
+      name: 'Suspicious New',
+      users: 50,
+      lastUpdated: new Date(Date.now() - 7 * 86400000).toISOString(), // 7 days ago
+    };
+    const findings = await analyzeWebStoreInfo(info);
+    const newLow = findings.find(f => f.id === 'webstore-new-low-users');
+    assert.ok(newLow, 'Should flag new extension with low users');
+  });
+
+  test('flags low users + dangerous permissions', async () => {
+    const info = {
+      name: 'Dangerous Low',
+      users: 30,
+      permissions: ['<all_urls>', 'storage'],
+    };
+    const findings = await analyzeWebStoreInfo(info);
+    const flagged = findings.find(f => f.id === 'webstore-low-users-dangerous-perms');
+    assert.ok(flagged, 'Should flag low users with dangerous perms');
+  });
+
+  test('does not flag established extension', async () => {
+    const info = {
+      name: 'Popular Safe',
+      users: 500000,
+      rating: 4.5,
+      lastUpdated: new Date(Date.now() - 30 * 86400000).toISOString(),
+    };
+    const findings = await analyzeWebStoreInfo(info);
+    const warnings = findings.filter(f => f.severity === 'warning' || f.severity === 'critical');
+    assert.strictEqual(warnings.length, 0, 'Established extension should have no warnings');
+  });
+});

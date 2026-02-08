@@ -207,6 +207,40 @@ async function analyzeWebStoreInfo(info: ExtendedWebStoreInfo | null): Promise<F
     }
   }
 
+  // Very new extension (published recently) - higher risk of being malicious
+  if (info.lastUpdated) {
+    const lastUpdate = new Date(info.lastUpdated);
+    const now = new Date();
+    const daysSinceUpdate = Math.floor((now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24));
+
+    // New extension with low users = classic malware pattern
+    if (daysSinceUpdate < 30 && info.users && info.users < 500) {
+      findings.push({
+        id: 'webstore-new-low-users',
+        severity: 'warning',
+        extension: extName,
+        message: `Recently published extension with very few users (${info.users})`,
+        recommendation: 'New extensions with few users are a common vector for malware distribution',
+      });
+    }
+  }
+
+  // Suspicious: very few users but dangerous permissions
+  if (info.users && info.users < 100 && info.permissions) {
+    const hasDangerous = info.permissions.some(p =>
+      ['<all_urls>', '*://*/*', 'webRequestBlocking', 'debugger', 'nativeMessaging'].includes(p)
+    );
+    if (hasDangerous) {
+      findings.push({
+        id: 'webstore-low-users-dangerous-perms',
+        severity: 'warning',
+        extension: extName,
+        message: `Extremely low user count (${info.users}) combined with dangerous permissions`,
+        recommendation: 'This combination is a strong indicator of potentially malicious extensions',
+      });
+    }
+  }
+
   if (info.rating && info.rating < 3.0) {
     findings.push({
       id: 'webstore-low-rating',
