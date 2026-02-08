@@ -195,6 +195,75 @@ async function main() {
     }
   }
 
+  if (command === 'baseline') {
+    const browser = args[1] && !args[1].startsWith('-') ? args[1] : (fileConfig.browser || 'chrome');
+    const cliOptions = parseOptions(args.slice(args[1]?.startsWith('-') ? 1 : 2));
+    const options = mergeConfig(fileConfig, cliOptions);
+    const outPath = cliOptions.output || `extvet-baseline-${browser}.json`;
+    logger.configure(options);
+
+    try {
+      const results = await scan(browser, { ...options, quiet: true });
+      const { exportBaseline, saveBaseline } = await import('../dist/baseline.js');
+      const baseline = exportBaseline(results, browser);
+      saveBaseline(baseline, outPath);
+      console.log(`✅ Baseline saved: ${outPath} (${baseline.extensions.length} extensions, Grade ${baseline.overallGrade})`);
+      process.exit(0);
+    } catch (error) {
+      logger.error(`Baseline failed: ${error.message}`, error);
+      process.exit(1);
+    }
+  }
+
+  if (command === 'diff') {
+    const baselinePath = args[1];
+    if (!baselinePath) {
+      console.error('Error: Baseline file path required. Usage: extvet diff <baseline.json> [browser]');
+      process.exit(1);
+    }
+    const browser = args[2] && !args[2].startsWith('-') ? args[2] : (fileConfig.browser || 'chrome');
+    const cliOptions = parseOptions(args.slice(3));
+    const options = mergeConfig(fileConfig, cliOptions);
+    logger.configure(options);
+
+    try {
+      const { loadBaseline, diffBaseline } = await import('../dist/baseline.js');
+      const baseline = loadBaseline(baselinePath);
+      const results = await scan(browser, { ...options, quiet: true });
+      const diff = diffBaseline(baseline, results);
+
+      console.log(`\n📊 ExtVet Diff — vs baseline from ${baseline.timestamp}\n`);
+
+      if (diff.added.length > 0) {
+        console.log(`🆕 New extensions (${diff.added.length}):`);
+        for (const e of diff.added) {
+          const emoji = e.grade === 'F' ? '🔴' : e.grade === 'D' ? '🟠' : '🟢';
+          console.log(`   ${emoji} ${e.grade} (${e.score}) — ${e.extension}`);
+        }
+      }
+      if (diff.removed.length > 0) {
+        console.log(`🗑️  Removed (${diff.removed.length}):`);
+        for (const e of diff.removed) console.log(`   - ${e.extension}`);
+      }
+      if (diff.gradeChanged.length > 0) {
+        console.log(`🔄 Grade changes (${diff.gradeChanged.length}):`);
+        for (const c of diff.gradeChanged) {
+          const dir = c.after.score > c.before.score ? '📈' : '📉';
+          console.log(`   ${dir} ${c.extension}: ${c.before.grade}(${c.before.score}) → ${c.after.grade}(${c.after.score})`);
+        }
+      }
+
+      console.log(`\n✅ Unchanged: ${diff.unchanged} | Drift score: ${diff.driftScore}`);
+
+      // Exit 1 if any new high-risk extensions
+      const hasHighRiskNew = diff.added.some(e => e.grade === 'D' || e.grade === 'F');
+      process.exit(hasHighRiskNew ? 1 : 0);
+    } catch (error) {
+      logger.error(`Diff failed: ${error.message}`, error);
+      process.exit(1);
+    }
+  }
+
   if (command === 'policy-init') {
     const { generateSamplePolicy } = await import('../dist/policy.js');
     const outPath = args[1] || '.extvet-policy.json';

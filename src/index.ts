@@ -94,4 +94,6 @@ export async function scanUrl(target: string, options: ScanOptions = {}): Promis
 export type { ScanOptions, ScanSummary, Finding, ExtensionRiskScore } from './types.js';
 export { calculateRiskScores, calculateOverallScore } from './risk-scorer.js';
 export { loadPolicy, evaluatePolicy, generateSamplePolicy } from './policy.js';
+export { exportBaseline, saveBaseline, loadBaseline, diffBaseline } from './baseline.js';
+export type { Baseline, BaselineDiff } from './baseline.js';
 export type { ExtensionPolicy, PolicyViolation } from './policy.js';

@@ -691,3 +691,61 @@ describe('Policy Engine', () => {
     assert.ok(Array.isArray(p.blockedPermissions));
   });
 });
+
+// =============================================
+// Baseline & Diff
+// =============================================
+
+const { exportBaseline, diffBaseline } = await import('../dist/baseline.js');
+
+describe('Baseline & Diff', () => {
+  const mockSummary = {
+    critical: 1, warning: 2, info: 3, total: 6,
+    riskScores: [
+      { extension: 'ExtA (aaa)', score: 10, grade: 'A', criticalCount: 0, warningCount: 1, infoCount: 1 },
+      { extension: 'ExtB (bbb)', score: 50, grade: 'C', criticalCount: 1, warningCount: 1, infoCount: 0 },
+    ],
+    overallRiskScore: 50,
+    overallGrade: 'C',
+  };
+
+  test('exportBaseline creates valid structure', () => {
+    const bl = exportBaseline(mockSummary, 'chrome');
+    assert.strictEqual(bl.browser, 'chrome');
+    assert.strictEqual(bl.extensions.length, 2);
+    assert.ok(bl.timestamp);
+  });
+
+  test('diffBaseline detects added extensions', () => {
+    const baseline = exportBaseline({ ...mockSummary, riskScores: [mockSummary.riskScores[0]] }, 'chrome');
+    const diff = diffBaseline(baseline, mockSummary);
+    assert.strictEqual(diff.added.length, 1);
+    assert.ok(diff.added[0].extension.includes('ExtB'));
+  });
+
+  test('diffBaseline detects removed extensions', () => {
+    const baseline = exportBaseline(mockSummary, 'chrome');
+    const current = { ...mockSummary, riskScores: [mockSummary.riskScores[0]] };
+    const diff = diffBaseline(baseline, current);
+    assert.strictEqual(diff.removed.length, 1);
+  });
+
+  test('diffBaseline detects grade changes', () => {
+    const baseline = exportBaseline(mockSummary, 'chrome');
+    const changed = { ...mockSummary, riskScores: [
+      { ...mockSummary.riskScores[0], score: 40, grade: 'C' },
+      mockSummary.riskScores[1],
+    ]};
+    const diff = diffBaseline(baseline, changed);
+    assert.strictEqual(diff.gradeChanged.length, 1);
+    assert.strictEqual(diff.gradeChanged[0].before.grade, 'A');
+    assert.strictEqual(diff.gradeChanged[0].after.grade, 'C');
+  });
+
+  test('diffBaseline unchanged count', () => {
+    const baseline = exportBaseline(mockSummary, 'chrome');
+    const diff = diffBaseline(baseline, mockSummary);
+    assert.strictEqual(diff.unchanged, 2);
+    assert.strictEqual(diff.driftScore, 0);
+  });
+});
