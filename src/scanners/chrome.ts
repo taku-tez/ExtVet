@@ -25,6 +25,7 @@ import {
   analyzeServiceWorker,
 } from '../analyzers.js';
 import { detectVulnerableLibraries } from '../lib-detector.js';
+import { checkWebStore } from '../webstore.js';
 import type { Finding, ScanOptions, ExtensionInfo } from '../types.js';
 
 /**
@@ -159,6 +160,43 @@ export async function scanChrome(options: ScanOptions = {}): Promise<Finding[]> 
     findings.push(...analyzeWebAccessibleResources(manifest, ext, 'ext'));
   }
   
+  // Web Store verification (--verify flag)
+  if (options.verify) {
+    logger.info('  Verifying extensions against Chrome Web Store...');
+    for (const ext of extensions) {
+      const manifest = parseManifest(ext.path);
+      if (!manifest) continue;
+      const extName = manifest.name || ext.id;
+
+      // Only verify Chrome extension IDs (32-char lowercase)
+      if (!/^[a-z]{32}$/.test(ext.id)) continue;
+
+      try {
+        const result = await checkWebStore(ext.id, { store: 'chrome' });
+        if (result.findings) {
+          // Re-tag findings with extension name
+          for (const f of result.findings) {
+            f.extension = `${extName} (${ext.id})`;
+            findings.push(f);
+          }
+        }
+
+        // Check if extension is not in store (sideloaded/removed)
+        if (!result.info) {
+          findings.push({
+            id: 'ext-not-in-store',
+            severity: 'warning',
+            extension: `${extName} (${ext.id})`,
+            message: 'Extension not found in Chrome Web Store (sideloaded or removed)',
+            recommendation: 'Sideloaded extensions bypass store review; removed extensions may have been flagged',
+          });
+        }
+      } catch (err) {
+        logger.debug(`Web store check failed for ${ext.id}: ${(err as Error).message}`);
+      }
+    }
+  }
+
   logger.debug(`Scan complete, ${findings.length} findings`);
   return findings;
 }

@@ -24,6 +24,7 @@ export interface ScanOptions {
   browser?: string;
   failOn?: 'critical' | 'warning' | 'info' | 'none';
   configPath?: string;
+  verify?: boolean;
 }
 
 export interface ExtensionRiskScore {

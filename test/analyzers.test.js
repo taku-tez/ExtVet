@@ -1205,3 +1205,22 @@ describe('Web Store Analysis Enhancements', () => {
     assert.strictEqual(warnings.length, 0, 'Established extension should have no warnings');
   });
 });
+
+describe('--verify Web Store cross-check', () => {
+  test('checkWebStore returns findings for valid extension', async () => {
+    const { checkWebStore } = await import('../dist/webstore.js');
+    // uBlock Origin - well-known extension
+    const result = await checkWebStore('cjpalhdlnbpafiamejdnhcphjbkeiagm');
+    assert.ok(result);
+    assert.ok(result.info, 'Should find uBlock in Chrome Web Store');
+    assert.ok(result.info.users > 1000000, 'uBlock should have millions of users');
+  });
+
+  test('checkWebStore returns result for any chrome extension ID', async () => {
+    const { checkWebStore } = await import('../dist/webstore.js');
+    const result = await checkWebStore('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', { store: 'chrome' });
+    // Chrome Web Store returns a default page for invalid IDs, so result is always present
+    assert.ok(result);
+    assert.ok(Array.isArray(result.findings));
+  });
+});

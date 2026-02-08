@@ -45,6 +45,7 @@ Options:
   --verbose           Enable debug output
   --severity <level>  Minimum severity to report (info, warning, critical)
   --fail-on <level>   Exit with code 1 on severity (critical, warning, info, none)
+  --verify            Cross-check installed extensions with Chrome Web Store
   --config <file>     Config file path (default: .extvetrc)
 
 Config file (.extvetrc):
@@ -422,6 +423,8 @@ function parseOptions(args) {
       options.failOnGrade = args[++i];
     } else if (args[i] === '--policy' && args[i + 1]) {
       options.policyPath = args[++i];
+    } else if (args[i] === '--verify') {
+      options.verify = true;
     }
   }
   return options;
