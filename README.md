@@ -17,13 +17,19 @@ ExtVet analyzes installed browser extensions for security risks, dangerous permi
 - 🌐 **Externally Connectable** — Warn when any website can message your extension
 - 📦 **Web Accessible Resources** — Detect fingerprinting and data leak risks
 - 🔄 **Update URL Analysis** — Flag extensions self-updating from external (non-store) servers
-- 🚨 **Known Malicious Detection** — Check against **562+ known malicious extension IDs** from 3 threat databases (auto-updated)
+- 🚨 **Known Malicious Detection** — Check against **600+ known malicious extension IDs** from 4 threat databases (auto-updated)
 - 🕵️ **Code Analysis** — Find `eval()`, CSP stripping, C2 patterns, cookie exfiltration, and 25+ suspicious patterns
+- 🔮 **Obfuscation Detection** — Detect packed code, string rotation, Dean Edwards packer, hex escapes
+- 🌐 **C2 Infrastructure Detection** — Flag ngrok tunnels, Telegram bots, Discord webhooks, pastebin, suspicious TLDs
 - 📜 **Manifest Inspection** — Manifest V2 deprecation, broad content scripts, MAIN world access
 - 🌐 **Multi-Browser** — Chrome, Firefox, Brave, Edge, Safari
 - 🔎 **Web Store Verification** — Chrome Web Store & Firefox Add-ons metadata + stale extension detection
-- 📊 **4 Output Formats** — Table, JSON (with risk scores), SARIF, HTML dashboard
-- 🚀 **CI/CD Ready** — GitHub Action, `--fail-on` flag, exit codes
+- 📊 **Risk Scoring** — Per-extension 0-100 score with A-F grades
+- 📊 **5 Output Formats** — Table, JSON, SARIF, HTML dashboard, Markdown
+- 🏛️ **Policy Engine** — Allowlist/blocklist, grade thresholds, required extensions, blocked permissions
+- 📈 **Baseline & Diff** — Export baselines, detect extension drift over time
+- 👁️ **Watch Mode** — Continuous monitoring with change detection
+- 🚀 **CI/CD Ready** — GitHub Action, `--fail-on`, `--fail-on-grade`, `--policy`, exit codes
 
 ## 📦 Installation
 
