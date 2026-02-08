@@ -22,6 +22,9 @@ Commands:
   scan [browser]      Scan installed browser extensions
   check <url|id>      Check a specific extension from web store
   file <path>         Scan a local extension file (.crx, .xpi, .zip)
+  list [browser]      List installed extensions with risk grades
+  baseline [browser]  Export current state as JSON baseline
+  diff <file> [browser] Compare against a baseline
   watch [browser]     Continuous monitoring (re-scans periodically)
   update              Update malicious extension database
   db-stats            Show database statistics
@@ -191,6 +194,39 @@ async function main() {
       process.exit(getExitCode(results, options));
     } catch (error) {
       logger.error(`File scan failed: ${error.message}`, error);
+      process.exit(1);
+    }
+  }
+
+  if (command === 'list') {
+    const browser = args[1] && !args[1].startsWith('-') ? args[1] : (fileConfig.browser || 'chrome');
+    const cliOptions = parseOptions(args.slice(args[1]?.startsWith('-') ? 1 : 2));
+    const options = mergeConfig(fileConfig, cliOptions);
+    logger.configure(options);
+
+    try {
+      const results = await scan(browser, { ...options, quiet: true });
+      const scores = results.riskScores || [];
+      
+      if (cliOptions.format === 'json') {
+        console.log(JSON.stringify(scores, null, 2));
+      } else {
+        console.log(`\n🦅 Installed Extensions — ${browser} (${scores.length} total)\n`);
+        if (scores.length === 0) {
+          console.log('  No extensions found.');
+        } else {
+          // Align columns
+          for (const s of scores) {
+            const emoji = s.grade === 'A' ? '🟢' : s.grade === 'B' ? '🟢' : s.grade === 'C' ? '🟡' : s.grade === 'D' ? '🟠' : '🔴';
+            const score = String(s.score).padStart(3);
+            console.log(`  ${emoji} ${s.grade} ${score}/100  ${s.extension}`);
+          }
+          console.log(`\n  Overall: Grade ${results.overallGrade} (${results.overallRiskScore}/100)`);
+        }
+      }
+      process.exit(0);
+    } catch (error) {
+      logger.error(`List failed: ${error.message}`, error);
       process.exit(1);
     }
   }
