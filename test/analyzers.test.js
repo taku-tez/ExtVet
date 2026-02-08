@@ -905,3 +905,55 @@ describe('analyzeServiceWorker', () => {
     });
   });
 });
+
+describe('scanFile enhanced', () => {
+  let scanFile;
+
+  test('load scanFile', async () => {
+    const mod = await import('../dist/file-scanner.js');
+    scanFile = mod.scanFile;
+    assert.ok(scanFile);
+  });
+
+  test('scanFile throws on non-existent file', async () => {
+    await assert.rejects(
+      () => scanFile('/tmp/nonexistent.crx'),
+      { message: /File not found/ }
+    );
+  });
+
+  test('scanFile scans a minimal .zip extension', async () => {
+    const { execSync } = await import('child_process');
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'extvet-test-'));
+    const extDir = path.join(tmpDir, 'ext');
+    fs.mkdirSync(extDir);
+    fs.writeFileSync(path.join(extDir, 'manifest.json'), JSON.stringify({
+      name: 'Test Ext',
+      version: '1.0',
+      manifest_version: 3,
+      permissions: ['cookies', '<all_urls>'],
+      background: { service_worker: 'sw.js' },
+    }));
+    fs.writeFileSync(path.join(extDir, 'sw.js'), 'chrome.runtime.onInstalled.addListener(() => { console.log("hi"); });');
+
+    const zipPath = path.join(tmpDir, 'test.zip');
+    execSync(`cd "${extDir}" && zip -q -r "${zipPath}" .`);
+
+    const result = await scanFile(zipPath, { format: 'json', quiet: true });
+    assert.ok(result);
+    assert.ok(result.total > 0, 'Should find permission issues');
+    assert.ok(result.critical > 0, 'Should find critical issues (cookies + all_urls combo)');
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('scanFile rejects unsupported file type', async () => {
+    const tmpFile = path.join(os.tmpdir(), 'extvet-test.txt');
+    fs.writeFileSync(tmpFile, 'hello');
+    await assert.rejects(
+      () => scanFile(tmpFile),
+      { message: /Unsupported file type/ }
+    );
+    fs.unlinkSync(tmpFile);
+  });
+});
