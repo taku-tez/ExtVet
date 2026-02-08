@@ -20,6 +20,9 @@ import {
   analyzeOptionalPermissions,
   analyzeDeclarativeNetRequest,
   analyzeObfuscation,
+} from './analyzers.js';
+import { detectVulnerableLibraries } from './lib-detector.js';
+import {
   checkManifestVersion,
   analyzePermissionCombos,
   analyzeCSP,
@@ -106,6 +109,7 @@ async function scanLocalFile(filePath: string, options: ScanOptions = {}): Promi
     findings.push(...analyzePermissionCombos(manifest, extInfo, 'file'));
     findings.push(...analyzeOptionalPermissions(manifest, extInfo, 'file'));
     findings.push(...analyzeDeclarativeNetRequest(manifest, extInfo, extractedPath, 'file'));
+    findings.push(...detectVulnerableLibraries(extractedPath, extInfo, manifest, 'file'));
     findings.push(...analyzeCSP(manifest, extInfo, 'file'));
     findings.push(...analyzeUpdateUrl(manifest, extInfo, 'file'));
     findings.push(...analyzeExternallyConnectable(manifest, extInfo, 'file'));

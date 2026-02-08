@@ -1097,3 +1097,67 @@ describe('analyzeDeclarativeNetRequest', () => {
     });
   });
 });
+
+import { detectVulnerableLibraries, isVersionBelow } from '../dist/lib-detector.js';
+
+describe('Vulnerable Library Detection', () => {
+  const mockExtInfo = { id: 'test-lib', version: '1.0.0', path: '' };
+  const mockManifest = { name: 'Test Ext' };
+
+  test('isVersionBelow works correctly', () => {
+    assert.strictEqual(isVersionBelow('3.4.1', '3.5.0'), true);
+    assert.strictEqual(isVersionBelow('3.5.0', '3.5.0'), false);
+    assert.strictEqual(isVersionBelow('3.6.0', '3.5.0'), false);
+    assert.strictEqual(isVersionBelow('2.0.0', '3.0.0'), true);
+    assert.strictEqual(isVersionBelow('4.0.0', '3.5.0'), false);
+  });
+
+  test('detects vulnerable jQuery', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'extvet-lib-'));
+    fs.writeFileSync(path.join(tmpDir, 'jquery.js'), '/*! jQuery JavaScript Library v3.3.1 */\n(function(){})();');
+    const findings = detectVulnerableLibraries(tmpDir, mockExtInfo, mockManifest);
+    const vuln = findings.find(f => f.message.includes('jQuery') && f.message.includes('3.3.1'));
+    assert.ok(vuln, 'Should detect vulnerable jQuery 3.3.1');
+    assert.strictEqual(vuln.severity, 'warning');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('safe jQuery version is info only', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'extvet-lib-'));
+    fs.writeFileSync(path.join(tmpDir, 'jquery.js'), '/*! jQuery JavaScript Library v3.7.1 */\n(function(){})();');
+    const findings = detectVulnerableLibraries(tmpDir, mockExtInfo, mockManifest);
+    const info = findings.find(f => f.message.includes('jQuery') && f.severity === 'info');
+    assert.ok(info, 'Should note safe jQuery as info');
+    const vuln = findings.find(f => f.message.includes('Vulnerable'));
+    assert.ok(!vuln, 'Should not flag safe jQuery as vulnerable');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('detects vulnerable Handlebars (critical)', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'extvet-lib-'));
+    fs.writeFileSync(path.join(tmpDir, 'handlebars.js'), '// Handlebars v4.5.3\nvar x = 1;');
+    const findings = detectVulnerableLibraries(tmpDir, mockExtInfo, mockManifest);
+    const vuln = findings.find(f => f.message.includes('Handlebars'));
+    assert.ok(vuln, 'Should detect vulnerable Handlebars');
+    assert.strictEqual(vuln.severity, 'critical');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('no findings for empty directory', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'extvet-lib-'));
+    const findings = detectVulnerableLibraries(tmpDir, mockExtInfo, mockManifest);
+    assert.strictEqual(findings.length, 0);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('no duplicates for same library version', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'extvet-lib-'));
+    fs.mkdirSync(path.join(tmpDir, 'sub'));
+    fs.writeFileSync(path.join(tmpDir, 'jquery.js'), '/*! jQuery JavaScript Library v3.3.1 */');
+    fs.writeFileSync(path.join(tmpDir, 'sub', 'jquery.min.js'), '/*! jQuery JavaScript Library v3.3.1 */');
+    const findings = detectVulnerableLibraries(tmpDir, mockExtInfo, mockManifest);
+    const jqueryFindings = findings.filter(f => f.message.includes('jQuery'));
+    assert.strictEqual(jqueryFindings.length, 1, 'Should deduplicate same library version');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});

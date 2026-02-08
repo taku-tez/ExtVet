@@ -23,6 +23,7 @@ import {
   checkKnownMalicious,
   analyzeServiceWorker,
 } from '../analyzers.js';
+import { detectVulnerableLibraries } from '../lib-detector.js';
 import type { Finding, ScanOptions, ExtensionInfo, Manifest } from '../types.js';
 
 interface Profile {
@@ -318,6 +319,7 @@ export async function scanFirefox(options: ScanOptions = {}): Promise<Finding[]>
     findings.push(...analyzePermissionCombos(manifest, ext, 'ff'));
         findings.push(...analyzeOptionalPermissions(manifest, ext, 'ff'));
         findings.push(...analyzeDeclarativeNetRequest(manifest, ext, scanPath, 'ff'));
+        findings.push(...detectVulnerableLibraries(scanPath, ext, manifest, 'ff'));
       findings.push(...analyzeCSP(manifest, ext, 'ff'));
       findings.push(...analyzeUpdateUrl(manifest, ext, 'ff'));
       findings.push(...analyzeExternallyConnectable(manifest, ext, 'ff'));
