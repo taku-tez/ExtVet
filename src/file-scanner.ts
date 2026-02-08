@@ -18,6 +18,7 @@ import {
   analyzeBackgroundScripts,
   analyzeServiceWorker,
   analyzeOptionalPermissions,
+  analyzeDeclarativeNetRequest,
   analyzeObfuscation,
   checkManifestVersion,
   analyzePermissionCombos,
@@ -104,6 +105,7 @@ async function scanLocalFile(filePath: string, options: ScanOptions = {}): Promi
     findings.push(...checkManifestVersion(manifest, extInfo, 'file'));
     findings.push(...analyzePermissionCombos(manifest, extInfo, 'file'));
     findings.push(...analyzeOptionalPermissions(manifest, extInfo, 'file'));
+    findings.push(...analyzeDeclarativeNetRequest(manifest, extInfo, extractedPath, 'file'));
     findings.push(...analyzeCSP(manifest, extInfo, 'file'));
     findings.push(...analyzeUpdateUrl(manifest, extInfo, 'file'));
     findings.push(...analyzeExternallyConnectable(manifest, extInfo, 'file'));

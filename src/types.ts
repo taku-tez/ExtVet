@@ -63,6 +63,13 @@ export interface Manifest {
   optional_permissions?: string[];
   optional_host_permissions?: string[];
   host_permissions?: string[];
+  declarative_net_request?: {
+    rule_resources?: Array<{
+      id: string;
+      enabled: boolean;
+      path: string;
+    }>;
+  };
   content_scripts?: ContentScript[];
   background?: Background;
   content_security_policy?: string | {

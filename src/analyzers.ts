@@ -355,6 +355,127 @@ export function analyzeOptionalPermissions(
 }
 
 /**
+ * Analyze declarativeNetRequest static rule files for abusive patterns
+ */
+export function analyzeDeclarativeNetRequest(
+  manifest: Manifest,
+  extInfo: ExtensionInfo,
+  extPath: string,
+  prefix: string = 'ext'
+): Finding[] {
+  const findings: Finding[] = [];
+  const extName = manifest.name || extInfo.id;
+  const ruleResources = manifest.declarative_net_request?.rule_resources;
+
+  if (!ruleResources || ruleResources.length === 0) return findings;
+
+  for (const resource of ruleResources) {
+    const rulePath = path.join(extPath, resource.path);
+    if (!fs.existsSync(rulePath)) continue;
+
+    let rules: Array<Record<string, unknown>>;
+    try {
+      rules = JSON.parse(fs.readFileSync(rulePath, 'utf-8'));
+      if (!Array.isArray(rules)) continue;
+    } catch {
+      continue;
+    }
+
+    let redirectCount = 0;
+    let headerModCount = 0;
+    let blockCount = 0;
+    let cspModCount = 0;
+    let suspiciousRedirects: string[] = [];
+
+    for (const rule of rules) {
+      const action = rule.action as Record<string, unknown> | undefined;
+      if (!action) continue;
+
+      const actionType = action.type as string;
+
+      if (actionType === 'redirect') {
+        redirectCount++;
+        const redirect = action.redirect as Record<string, string> | undefined;
+        if (redirect?.url) {
+          const url = redirect.url;
+          // Check for suspicious redirect targets
+          if (/\.(tk|ml|ga|cf|gq|top|xyz|buzz)/.test(url) ||
+              /ngrok|trycloudflare|workers\.dev/.test(url) ||
+              /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(url)) {
+            suspiciousRedirects.push(url);
+          }
+        }
+      } else if (actionType === 'modifyHeaders') {
+        headerModCount++;
+        const responseHeaders = action.responseHeaders as Array<Record<string, string>> | undefined;
+        if (responseHeaders) {
+          for (const header of responseHeaders) {
+            if (header.header?.toLowerCase() === 'content-security-policy' &&
+                (header.operation === 'remove' || header.operation === 'set')) {
+              cspModCount++;
+            }
+          }
+        }
+      } else if (actionType === 'block') {
+        blockCount++;
+      }
+    }
+
+    if (suspiciousRedirects.length > 0) {
+      findings.push({
+        id: `${prefix}-dnr-suspicious-redirect`,
+        severity: 'critical',
+        extension: `${extName} (${extInfo.id})`,
+        message: `Static rules redirect to suspicious URLs: ${suspiciousRedirects.slice(0, 3).join(', ')}`,
+        recommendation: 'Redirects to suspicious domains may intercept user traffic',
+      });
+    }
+
+    if (cspModCount > 0) {
+      findings.push({
+        id: `${prefix}-dnr-csp-strip`,
+        severity: 'critical',
+        extension: `${extName} (${extInfo.id})`,
+        message: `Static rules strip/modify CSP headers (${cspModCount} rules) in ${resource.path}`,
+        recommendation: 'CSP stripping enables XSS and code injection on affected pages',
+      });
+    }
+
+    if (redirectCount > 50) {
+      findings.push({
+        id: `${prefix}-dnr-mass-redirect`,
+        severity: 'warning',
+        extension: `${extName} (${extInfo.id})`,
+        message: `Large number of redirect rules (${redirectCount}) in ${resource.path}`,
+        recommendation: 'Excessive redirects may indicate ad injection or traffic hijacking',
+      });
+    }
+
+    if (headerModCount > 20) {
+      findings.push({
+        id: `${prefix}-dnr-mass-header-mod`,
+        severity: 'info',
+        extension: `${extName} (${extInfo.id})`,
+        message: `${headerModCount} header modification rules in ${resource.path}`,
+        recommendation: 'Review header modifications for potential security impact',
+      });
+    }
+
+    if (blockCount > 0) {
+      findings.push({
+        id: `${prefix}-dnr-block-rules`,
+        severity: 'info',
+        extension: `${extName} (${extInfo.id})`,
+        message: `${blockCount} request blocking rules in ${resource.path}`,
+        recommendation: 'Blocking rules are normal for ad blockers; verify they are expected',
+      });
+    }
+  }
+
+  return findings;
+}
+
+/**
  * Analyze dangerous permission combinations
  */
 export function analyzePermissionCombos(

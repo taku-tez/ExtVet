@@ -14,6 +14,7 @@ import {
   checkManifestVersion,
   analyzePermissionCombos,
   analyzeOptionalPermissions,
+  analyzeDeclarativeNetRequest,
   analyzeCSP,
   analyzeUpdateUrl,
   analyzeExternallyConnectable,
@@ -149,6 +150,7 @@ export async function scanChrome(options: ScanOptions = {}): Promise<Finding[]> 
     findings.push(...checkManifestVersion(manifest, ext, 'ext'));
     findings.push(...analyzePermissionCombos(manifest, ext, 'ext'));
     findings.push(...analyzeOptionalPermissions(manifest, ext, 'ext'));
+    findings.push(...analyzeDeclarativeNetRequest(manifest, ext, ext.path, 'ext'));
     findings.push(...analyzeCSP(manifest, ext, 'ext'));
     findings.push(...analyzeUpdateUrl(manifest, ext, 'ext'));
     findings.push(...analyzeExternallyConnectable(manifest, ext, 'ext'));

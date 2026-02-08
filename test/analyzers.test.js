@@ -1014,3 +1014,86 @@ describe('analyzeOptionalPermissions', () => {
     assert.ok(!escalation, 'Should not flag escalation when already dangerous at install');
   });
 });
+
+import { analyzeDeclarativeNetRequest } from '../dist/analyzers.js';
+
+describe('analyzeDeclarativeNetRequest', () => {
+  const mockExtInfo = { id: 'test-dnr', version: '1.0.0', path: '' };
+
+  function withRules(rules, callback) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'extvet-dnr-'));
+    fs.writeFileSync(path.join(tmpDir, 'rules.json'), JSON.stringify(rules));
+    try {
+      callback(tmpDir);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  }
+
+  test('returns empty when no declarative_net_request', () => {
+    const manifest = { name: 'Test' };
+    const findings = analyzeDeclarativeNetRequest(manifest, mockExtInfo, '/tmp');
+    assert.strictEqual(findings.length, 0);
+  });
+
+  test('detects suspicious redirect targets', () => {
+    const rules = [
+      { id: 1, action: { type: 'redirect', redirect: { url: 'https://evil.ngrok.io/steal' } }, condition: {} },
+    ];
+    withRules(rules, (dir) => {
+      const manifest = {
+        name: 'Redirector',
+        declarative_net_request: { rule_resources: [{ id: 'r1', enabled: true, path: 'rules.json' }] },
+      };
+      const findings = analyzeDeclarativeNetRequest(manifest, mockExtInfo, dir);
+      const suspicious = findings.find(f => f.id.includes('suspicious-redirect'));
+      assert.ok(suspicious, 'Should detect ngrok redirect');
+      assert.strictEqual(suspicious.severity, 'critical');
+    });
+  });
+
+  test('detects CSP stripping rules', () => {
+    const rules = [
+      { id: 1, action: { type: 'modifyHeaders', responseHeaders: [{ header: 'content-security-policy', operation: 'remove' }] }, condition: {} },
+    ];
+    withRules(rules, (dir) => {
+      const manifest = {
+        name: 'CSP Stripper',
+        declarative_net_request: { rule_resources: [{ id: 'r1', enabled: true, path: 'rules.json' }] },
+      };
+      const findings = analyzeDeclarativeNetRequest(manifest, mockExtInfo, dir);
+      const csp = findings.find(f => f.id.includes('csp-strip'));
+      assert.ok(csp, 'Should detect CSP stripping');
+      assert.strictEqual(csp.severity, 'critical');
+    });
+  });
+
+  test('detects block rules as info', () => {
+    const rules = Array.from({ length: 5 }, (_, i) => ({ id: i, action: { type: 'block' }, condition: {} }));
+    withRules(rules, (dir) => {
+      const manifest = {
+        name: 'Blocker',
+        declarative_net_request: { rule_resources: [{ id: 'r1', enabled: true, path: 'rules.json' }] },
+      };
+      const findings = analyzeDeclarativeNetRequest(manifest, mockExtInfo, dir);
+      const block = findings.find(f => f.id.includes('block-rules'));
+      assert.ok(block);
+      assert.strictEqual(block.severity, 'info');
+    });
+  });
+
+  test('clean redirect rules produce no critical findings', () => {
+    const rules = [
+      { id: 1, action: { type: 'redirect', redirect: { url: 'https://example.com/safe' } }, condition: {} },
+    ];
+    withRules(rules, (dir) => {
+      const manifest = {
+        name: 'Safe',
+        declarative_net_request: { rule_resources: [{ id: 'r1', enabled: true, path: 'rules.json' }] },
+      };
+      const findings = analyzeDeclarativeNetRequest(manifest, mockExtInfo, dir);
+      const criticals = findings.filter(f => f.severity === 'critical');
+      assert.strictEqual(criticals.length, 0);
+    });
+  });
+});
