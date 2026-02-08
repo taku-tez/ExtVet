@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as logger from './logger.js';
-import { DANGEROUS_PERMISSIONS, DANGEROUS_COMBOS, SUSPICIOUS_PATTERNS, LEGITIMATE_URLS, SUSPICIOUS_DOMAINS } from './constants.js';
+import { DANGEROUS_PERMISSIONS, DANGEROUS_COMBOS, SUSPICIOUS_PATTERNS, LEGITIMATE_URLS, SUSPICIOUS_DOMAINS, SERVICE_WORKER_PATTERNS } from './constants.js';
 import type { Finding, Manifest, ExtensionInfo, PermissionDanger, SuspiciousPattern } from './types.js';
 
 /**
@@ -221,6 +221,75 @@ export function analyzeBackgroundScripts(
     }
   }
   
+  return findings;
+}
+
+/**
+ * Analyze MV3 service worker for security-specific patterns
+ * Service workers have unique attack surfaces vs traditional background pages
+ */
+export function analyzeServiceWorker(
+  manifest: Manifest,
+  extInfo: ExtensionInfo,
+  extPath: string,
+  prefix: string = 'ext'
+): Finding[] {
+  const findings: Finding[] = [];
+  const extName = manifest.name || extInfo.id;
+
+  // Only applies to MV3 with service_worker
+  if (!manifest.background?.service_worker) return findings;
+
+  const swFile = manifest.background.service_worker;
+  const swPath = path.join(extPath, swFile);
+
+  if (!fs.existsSync(swPath)) return findings;
+
+  let content: string;
+  try {
+    content = fs.readFileSync(swPath, 'utf-8');
+  } catch {
+    return findings;
+  }
+
+  // Check service worker-specific patterns
+  for (const pattern of SERVICE_WORKER_PATTERNS) {
+    // Reset regex lastIndex for global patterns
+    pattern.pattern.lastIndex = 0;
+    const matches = content.match(pattern.pattern);
+    if (matches) {
+      findings.push({
+        id: `${prefix}-sw-${pattern.msg.replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 50)}`,
+        severity: pattern.severity,
+        extension: `${extName} (${extInfo.id})`,
+        message: `[Service Worker] ${pattern.msg} in ${swFile}`,
+        recommendation: 'Service worker patterns require careful review — they run persistently in the background',
+      });
+    }
+  }
+
+  // Check for MV3 service worker with persistent background workaround
+  if (manifest.background.persistent === true && manifest.manifest_version === 3) {
+    findings.push({
+      id: `${prefix}-sw-persistent-mv3`,
+      severity: 'warning',
+      extension: `${extName} (${extInfo.id})`,
+      message: 'MV3 manifest declares persistent background (should use service worker lifecycle)',
+      recommendation: 'MV3 extensions should not use persistent backgrounds; this may indicate lifecycle manipulation',
+    });
+  }
+
+  // Check service worker size (very large SW = likely bundled/obfuscated)
+  if (content.length > 500000) {
+    findings.push({
+      id: `${prefix}-sw-large`,
+      severity: 'info',
+      extension: `${extName} (${extInfo.id})`,
+      message: `Large service worker file (${Math.round(content.length / 1024)}KB) — ${swFile}`,
+      recommendation: 'Large service workers may contain bundled obfuscated code; review what is included',
+    });
+  }
+
   return findings;
 }
 

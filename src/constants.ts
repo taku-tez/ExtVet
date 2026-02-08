@@ -8,7 +8,7 @@ import type { PermissionDanger, SuspiciousPattern } from './types.js';
 /**
  * ExtVet version - single source of truth
  */
-export const VERSION = '1.7.0';
+export const VERSION = '2.3.0';
 
 /**
  * Dangerous permissions that need security review
@@ -127,6 +127,31 @@ export const SUSPICIOUS_PATTERNS: SuspiciousPattern[] = [
   { pattern: /chrome\.cookies\.getAll\s*\(\s*\{\s*\}/g, severity: 'critical', msg: 'Attempts to read all cookies' },
   { pattern: /document\.cookie.*fetch|fetch.*document\.cookie/g, severity: 'critical', msg: 'Cookie exfiltration pattern' },
   { pattern: /localStorage.*fetch|fetch.*localStorage/g, severity: 'warning', msg: 'LocalStorage exfiltration pattern' },
+];
+
+/**
+ * Service worker / background-specific suspicious patterns
+ * These patterns are especially dangerous in MV3 service workers
+ */
+export const SERVICE_WORKER_PATTERNS: SuspiciousPattern[] = [
+  // External script loading in service worker
+  { pattern: /importScripts\s*\(\s*['"`]https?:\/\//g, severity: 'critical', msg: 'Service worker imports external scripts (remote code execution)' },
+  { pattern: /importScripts\s*\(/g, severity: 'info', msg: 'Service worker uses importScripts' },
+  // Alarm-based C2 polling
+  { pattern: /chrome\.alarms\.create\s*\([^)]*periodInMinutes\s*:\s*[0-9.]+/g, severity: 'info', msg: 'Creates periodic alarm (check for C2 polling)' },
+  { pattern: /chrome\.alarms\.onAlarm\.addListener[\s\S]{0,200}fetch\s*\(/g, severity: 'warning', msg: 'Alarm triggers network fetch (potential C2 beacon pattern)' },
+  // Immediate data collection on install
+  { pattern: /chrome\.runtime\.onInstalled\.addListener[\s\S]{0,500}chrome\.cookies\.getAll/g, severity: 'critical', msg: 'Collects all cookies immediately on install (data theft)' },
+  { pattern: /chrome\.runtime\.onInstalled\.addListener[\s\S]{0,500}chrome\.history\.(search|getVisits)/g, severity: 'critical', msg: 'Harvests browsing history on install (data theft)' },
+  { pattern: /chrome\.runtime\.onInstalled\.addListener[\s\S]{0,300}fetch\s*\(/g, severity: 'warning', msg: 'Phones home immediately on install' },
+  // Keepalive tricks to maintain persistence
+  { pattern: /chrome\.runtime\.connect[\s\S]{0,100}keepAlive|keepAlive[\s\S]{0,100}chrome\.runtime\.connect/g, severity: 'warning', msg: 'Service worker keepalive trick (persistence evasion)' },
+  { pattern: /setInterval\s*\(\s*\(\)\s*=>\s*\{[\s\S]{0,50}chrome\.runtime\.getPlatformInfo/g, severity: 'warning', msg: 'Service worker keepalive via periodic API calls' },
+  // Dynamic rule manipulation
+  { pattern: /chrome\.declarativeNetRequest\.updateDynamicRules[\s\S]{0,300}redirect/g, severity: 'warning', msg: 'Dynamically redirects requests via declarativeNetRequest' },
+  // Extension self-disabling (anti-forensics)
+  { pattern: /chrome\.management\.setEnabled\s*\([^,]+,\s*false/g, severity: 'warning', msg: 'Can disable itself or other extensions (anti-forensics)' },
+  { pattern: /chrome\.management\.uninstallSelf/g, severity: 'warning', msg: 'Can self-uninstall (evidence destruction)' },
 ];
 
 /**

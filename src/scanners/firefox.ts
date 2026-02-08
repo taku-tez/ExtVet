@@ -19,6 +19,7 @@ import {
   analyzeWebAccessibleResources,
   loadMaliciousDb,
   checkKnownMalicious,
+  analyzeServiceWorker,
 } from '../analyzers.js';
 import type { Finding, ScanOptions, ExtensionInfo, Manifest } from '../types.js';
 
@@ -321,6 +322,7 @@ export async function scanFirefox(options: ScanOptions = {}): Promise<Finding[]>
       // Only analyze scripts for unpacked extensions
       if (ext.type !== 'xpi') {
         findings.push(...analyzeBackgroundScripts(manifest, ext, scanPath, 'ff', FIREFOX_PATTERNS));
+        findings.push(...analyzeServiceWorker(manifest, ext, scanPath, 'ff'));
       }
       
       // Cleanup extracted XPI

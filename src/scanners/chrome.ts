@@ -20,6 +20,7 @@ import {
   parseManifest,
   loadMaliciousDb,
   checkKnownMalicious,
+  analyzeServiceWorker,
 } from '../analyzers.js';
 import type { Finding, ScanOptions, ExtensionInfo } from '../types.js';
 
@@ -143,6 +144,7 @@ export async function scanChrome(options: ScanOptions = {}): Promise<Finding[]> 
     findings.push(...analyzePermissions(manifest, ext, 'ext'));
     findings.push(...analyzeContentScripts(manifest, ext, 'ext'));
     findings.push(...analyzeBackgroundScripts(manifest, ext, ext.path, 'ext'));
+    findings.push(...analyzeServiceWorker(manifest, ext, ext.path, 'ext'));
     findings.push(...checkManifestVersion(manifest, ext, 'ext'));
     findings.push(...analyzePermissionCombos(manifest, ext, 'ext'));
     findings.push(...analyzeCSP(manifest, ext, 'ext'));
