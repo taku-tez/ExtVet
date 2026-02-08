@@ -633,3 +633,61 @@ describe('Risk Scorer', () => {
     assert.ok('overallGrade' in result);
   });
 });
+
+// =============================================
+// Policy Engine
+// =============================================
+
+const { evaluatePolicy, generateSamplePolicy } = await import('../dist/policy.js');
+
+describe('Policy Engine', () => {
+  const scores = [
+    { extension: 'Good (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)', score: 5, grade: 'A', criticalCount: 0, warningCount: 0, infoCount: 2 },
+    { extension: 'Risky (bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)', score: 60, grade: 'D', criticalCount: 2, warningCount: 1, infoCount: 0 },
+  ];
+  const findings = [];
+  const ids = ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'];
+
+  test('maxGrade violation', () => {
+    const policy = { maxGrade: 'C' };
+    const violations = evaluatePolicy(policy, scores, findings, ids);
+    assert.ok(violations.some(v => v.rule === 'maxGrade' && v.extension.includes('Risky')));
+  });
+
+  test('maxScore violation', () => {
+    const policy = { maxScore: 50 };
+    const violations = evaluatePolicy(policy, scores, findings, ids);
+    assert.ok(violations.some(v => v.rule === 'maxScore'));
+  });
+
+  test('blocklist violation', () => {
+    const policy = { blocklist: ['bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'] };
+    const violations = evaluatePolicy(policy, scores, findings, ids);
+    assert.ok(violations.some(v => v.rule === 'blocklist'));
+  });
+
+  test('allowlist violation', () => {
+    const policy = { allowlist: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'] };
+    const violations = evaluatePolicy(policy, scores, findings, ids);
+    assert.ok(violations.some(v => v.rule === 'allowlist' && v.extension.includes('Risky')));
+  });
+
+  test('required missing', () => {
+    const policy = { required: ['cccccccccccccccccccccccccccccccc'] };
+    const violations = evaluatePolicy(policy, scores, findings, ids);
+    assert.ok(violations.some(v => v.rule === 'required'));
+  });
+
+  test('no violations when compliant', () => {
+    const policy = { maxGrade: 'F', maxScore: 100 };
+    const violations = evaluatePolicy(policy, scores, findings, ids);
+    assert.strictEqual(violations.length, 0);
+  });
+
+  test('generateSamplePolicy returns valid structure', () => {
+    const p = generateSamplePolicy();
+    assert.ok(p.name);
+    assert.ok(p.maxGrade);
+    assert.ok(Array.isArray(p.blockedPermissions));
+  });
+});

@@ -121,6 +121,28 @@ async function main() {
     
     try {
       const results = await scan(browser, options);
+
+      // Policy evaluation
+      if (options.policyPath) {
+        const { loadPolicy, evaluatePolicy } = await import('../dist/policy.js');
+        const policy = loadPolicy(options.policyPath);
+        const installedIds = (results.riskScores || []).map(s => {
+          const m = s.extension.match(/\(([a-z]{32})\)/);
+          return m ? m[1] : s.extension;
+        });
+        const violations = evaluatePolicy(policy, results.riskScores || [], results.findings || [], installedIds);
+        if (violations.length > 0) {
+          console.log('\n⚠️  POLICY VIOLATIONS:');
+          for (const v of violations) {
+            console.log(`  ❌ [${v.rule}] ${v.extension}: ${v.message}`);
+          }
+          console.log(`\n${violations.length} violation(s) found.`);
+          process.exit(2);
+        } else {
+          console.log('\n✅ All extensions comply with policy.');
+        }
+      }
+
       process.exit(getExitCode(results, options));
     } catch (error) {
       logger.error(`Scan failed: ${error.message}`, error);
@@ -171,6 +193,16 @@ async function main() {
       logger.error(`File scan failed: ${error.message}`, error);
       process.exit(1);
     }
+  }
+
+  if (command === 'policy-init') {
+    const { generateSamplePolicy } = await import('../dist/policy.js');
+    const outPath = args[1] || '.extvet-policy.json';
+    const fs = await import('fs');
+    fs.writeFileSync(outPath, JSON.stringify(generateSamplePolicy(), null, 2));
+    console.log(`✅ Sample policy written to ${outPath}`);
+    console.log('Edit this file, then use: extvet scan chrome --policy .extvet-policy.json');
+    process.exit(0);
   }
 
   if (command === 'watch') {
@@ -243,6 +275,15 @@ async function main() {
 }
 
 function getExitCode(results, options) {
+  // Grade-based exit code (--fail-on-grade A|B|C|D|F)
+  if (options.failOnGrade && results.riskScores) {
+    const gradeOrder = { A: 0, B: 1, C: 2, D: 3, F: 4 };
+    const threshold = gradeOrder[options.failOnGrade.toUpperCase()] ?? 3;
+    const worstExt = results.riskScores.find(s => gradeOrder[s.grade] >= threshold);
+    if (worstExt) return 1;
+    return 0;
+  }
+
   const failOn = options.failOn || 'critical';
   if (failOn === 'critical') return results.critical > 0 ? 1 : 0;
   if (failOn === 'warning') return (results.critical + results.warning) > 0 ? 1 : 0;
@@ -272,6 +313,10 @@ function parseOptions(args) {
       options.failOn = args[++i];
     } else if (args[i] === '--watch-interval' && args[i + 1]) {
       options.watchInterval = args[++i];
+    } else if (args[i] === '--fail-on-grade' && args[i + 1]) {
+      options.failOnGrade = args[++i];
+    } else if (args[i] === '--policy' && args[i + 1]) {
+      options.policyPath = args[++i];
     }
   }
   return options;
