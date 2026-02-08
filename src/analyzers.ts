@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as logger from './logger.js';
-import { DANGEROUS_PERMISSIONS, DANGEROUS_COMBOS, SUSPICIOUS_PATTERNS, LEGITIMATE_URLS } from './constants.js';
+import { DANGEROUS_PERMISSIONS, DANGEROUS_COMBOS, SUSPICIOUS_PATTERNS, LEGITIMATE_URLS, SUSPICIOUS_DOMAINS } from './constants.js';
 import type { Finding, Manifest, ExtensionInfo, PermissionDanger, SuspiciousPattern } from './types.js';
 
 /**
@@ -160,6 +160,20 @@ export function analyzeScriptContent(
       message: `Connects to external URLs: ${externalUrls.slice(0, 3).join(', ')}${externalUrls.length > 3 ? '...' : ''}`,
       recommendation: 'Verify these external connections are expected',
     });
+  }
+
+  // Check suspicious domain patterns
+  for (const domain of SUSPICIOUS_DOMAINS) {
+    const matches = content.match(domain.pattern);
+    if (matches) {
+      findings.push({
+        id: `${prefix}-suspicious-domain`,
+        severity: domain.severity,
+        extension: `${extName} (${extInfo.id})`,
+        message: `${domain.msg} in ${scriptName}: ${matches[0]}`,
+        recommendation: 'Investigate this connection — it matches known malicious infrastructure patterns',
+      });
+    }
   }
   
   return findings;

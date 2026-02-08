@@ -270,3 +270,34 @@ export const LEGITIMATE_URLS = [
   'cdn.jsdelivr.net',
   'unpkg.com',
 ];
+
+/**
+ * Suspicious URL patterns in extension code
+ * Domains/patterns commonly used for C2, data exfiltration, or phishing
+ */
+export interface SuspiciousDomain {
+  pattern: RegExp;
+  severity: 'critical' | 'warning';
+  msg: string;
+}
+
+export const SUSPICIOUS_DOMAINS: SuspiciousDomain[] = [
+  // IP-based URLs (C2 servers)
+  { pattern: /https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/, severity: 'warning', msg: 'Connects to raw IP address (potential C2 server)' },
+  // Data exfiltration endpoints
+  { pattern: /https?:\/\/[^/]*\.workers\.dev/, severity: 'warning', msg: 'Uses Cloudflare Workers endpoint (common for data relay)' },
+  { pattern: /https?:\/\/[^/]*\.ngrok\.io/, severity: 'critical', msg: 'Connects to ngrok tunnel (likely C2 or dev backdoor)' },
+  { pattern: /https?:\/\/[^/]*\.trycloudflare\.com/, severity: 'warning', msg: 'Uses Cloudflare Tunnel (temporary endpoint, suspicious in production)' },
+  // Suspicious TLDs commonly used in malicious extensions
+  { pattern: /https?:\/\/[^/]*\.(tk|ml|ga|cf|gq|top|xyz|buzz|click|rest)\b/, severity: 'warning', msg: 'Uses suspicious TLD commonly associated with malware' },
+  // Pastebin/code hosting for payload delivery
+  { pattern: /https?:\/\/(pastebin\.com|paste\.ee|hastebin\.com|rentry\.co)/, severity: 'critical', msg: 'Fetches from paste service (payload delivery pattern)' },
+  // URL shorteners (hiding actual destination)
+  { pattern: /https?:\/\/(bit\.ly|tinyurl\.com|t\.co|is\.gd|v\.gd|shorturl\.at)/, severity: 'warning', msg: 'Uses URL shortener (hides actual destination)' },
+  // Telegram bot API (common C2 channel)
+  { pattern: /https?:\/\/api\.telegram\.org\/bot/, severity: 'critical', msg: 'Communicates with Telegram Bot API (C2 channel)' },
+  // Discord webhooks (data exfiltration)
+  { pattern: /https?:\/\/discord\.com\/api\/webhooks/, severity: 'critical', msg: 'Uses Discord webhook (data exfiltration channel)' },
+  // Dynamic DNS services
+  { pattern: /https?:\/\/[^/]*\.(duckdns\.org|no-ip\.com|dynu\.com|freedns\.afraid\.org)/, severity: 'warning', msg: 'Uses dynamic DNS (infrastructure hiding pattern)' },
+];
