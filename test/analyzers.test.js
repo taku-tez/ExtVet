@@ -1224,3 +1224,34 @@ describe('--verify Web Store cross-check', () => {
     assert.ok(Array.isArray(result.findings));
   });
 });
+
+import { getThreatIntel, getCampaigns } from '../dist/threat-intel.js';
+
+describe('Threat Intelligence', () => {
+  test('returns intel for known Cyberhaven extension', () => {
+    const intel = getThreatIntel('pajkjnmeojmbapicmbpliphjmcekeaac');
+    assert.ok(intel);
+    assert.strictEqual(intel.campaign, 'Cyberhaven Supply Chain');
+    assert.strictEqual(intel.severity, 'critical');
+    assert.ok(intel.description.includes('OAuth'));
+  });
+
+  test('returns null for unknown extension', () => {
+    const intel = getThreatIntel('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    assert.strictEqual(intel, null);
+  });
+
+  test('getCampaigns groups extensions by campaign', () => {
+    const campaigns = getCampaigns();
+    assert.ok(campaigns.has('Cyberhaven Supply Chain'));
+    assert.ok(campaigns.get('Cyberhaven Supply Chain').length >= 3);
+    assert.ok(campaigns.has('CSP Stripping Campaign'));
+  });
+
+  test('CSP stripping campaign has affected users info', () => {
+    const intel = getThreatIntel('mdaboflcmhejfihjcbmdiebgfchigjcf');
+    assert.ok(intel);
+    assert.strictEqual(intel.campaign, 'CSP Stripping Campaign');
+    assert.ok(intel.affectedUsers.includes('3.2M'));
+  });
+});

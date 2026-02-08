@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as logger from './logger.js';
 import { DANGEROUS_PERMISSIONS, DANGEROUS_COMBOS, SUSPICIOUS_PATTERNS, LEGITIMATE_URLS, SUSPICIOUS_DOMAINS, SERVICE_WORKER_PATTERNS } from './constants.js';
+import { getThreatIntel } from './threat-intel.js';
 import type { Finding, Manifest, ExtensionInfo, PermissionDanger, SuspiciousPattern } from './types.js';
 
 /**
@@ -891,11 +892,26 @@ export function checkKnownMalicious(
   if (!KNOWN_MALICIOUS?.has(extInfo.id)) return [];
   
   const extName = manifest.name || extInfo.id;
-  return [{
-    id: `${prefix}-known-malicious`,
-    severity: 'critical',
-    extension: `${extName} (${extInfo.id})`,
-    message: 'Extension is flagged as KNOWN MALICIOUS',
-    recommendation: 'Remove this extension immediately',
-  }];
+  const findings: Finding[] = [];
+  const intel = getThreatIntel(extInfo.id);
+
+  if (intel) {
+    findings.push({
+      id: `${prefix}-known-malicious`,
+      severity: 'critical',
+      extension: `${extName} (${extInfo.id})`,
+      message: `KNOWN MALICIOUS — Campaign: ${intel.campaign} (${intel.discovered})${intel.affectedUsers ? ` | ${intel.affectedUsers} affected` : ''}`,
+      recommendation: `Remove immediately. ${intel.description}`,
+    });
+  } else {
+    findings.push({
+      id: `${prefix}-known-malicious`,
+      severity: 'critical',
+      extension: `${extName} (${extInfo.id})`,
+      message: 'Extension is flagged as KNOWN MALICIOUS in threat databases',
+      recommendation: 'Remove this extension immediately',
+    });
+  }
+
+  return findings;
 }
